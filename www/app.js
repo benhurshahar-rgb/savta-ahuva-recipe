@@ -526,13 +526,19 @@ function photoSheet(r) {
 function viewer(pages, i) {
   layer.innerHTML = '<div class="viewer fade-in"><div class="bar"><button class="vb" data-a="x" aria-label="לסגור">' + ic('x', 22, '#FBF4E4', 2.2) + '</button>'
     + '<span class="lbl"></span><div style="display:flex;gap:6px"><button class="vb" data-a="out" aria-label="להקטין">' + ic('minus', 22, '#FBF4E4', 2.2) + '</button><button class="vb" data-a="in" aria-label="להגדיל">' + ic('plus', 22, '#FBF4E4', 2.2) + '</button></div></div>'
-    + '<div class="area"><img alt="הדף המקורי מהמחברת"></div>'
+    + '<div class="area"><img alt="הדף המקורי מהמחברת"></div><div class="onpage hs"></div>'
     + (pages.length > 1 ? '<div class="bar"><button class="vb" data-a="p" aria-label="הדף הקודם">' + ic('back', 22, '#FBF4E4', 2.2) + '</button><span style="font-size:14px">החלקה בשתי אצבעות לזום</span><button class="vb" data-a="n" aria-label="הדף הבא">' + ic('next', 22, '#FBF4E4', 2.2) + '</button></div>' : '<div class="bar" style="justify-content:center"><span style="font-size:14px">צביטה בשתי אצבעות או לחיצה כפולה לזום</span></div>')
     + '</div>';
   var root = $('.viewer', layer), img = $('img', root), area = $('.area', root), lbl = $('.lbl', root);
   var z = 1, tx = 0, ty = 0;
   function apply() { img.style.transform = 'translate(-50%,-50%) translate(' + tx + 'px,' + ty + 'px) scale(' + z + ')'; }
-  function load() { img.src = pages[i]; z = 1; tx = ty = 0; apply(); lbl.textContent = 'דף ' + (i + 1) + ' מתוך ' + pages.length; }
+  function load() {
+    img.src = pages[i]; z = 1; tx = ty = 0; apply(); lbl.textContent = 'דף ' + (i + 1) + ' מתוך ' + pages.length;
+    var on = vis().filter(function (r) { return r.pages.some(function (p) { return pageSrc(p) === pages[i]; }); });
+    var box = $('.onpage', root);
+    box.innerHTML = on.length > 1 ? '<span>המתכונים מהדף הזה:</span>' + on.map(function (r) { return '<button data-k="' + esc(r.k) + '"><b>' + r.n + '</b> ' + esc(r.title) + '</button>'; }).join('') : '';
+    $$('button', box).forEach(function (b) { b.onclick = function () { closeLayer(); ui.editing = null; ui.note = null; var c = cur(); if (c.name === 'recipe') replace({ name: 'recipe', k: b.dataset.k }, 'fade'); else go({ name: 'recipe', k: b.dataset.k }, 'fade'); }; });
+  }
   function zoom(f) { z = Math.max(1, Math.min(5, z * f)); if (z === 1) { tx = ty = 0; } apply(); }
   $('[data-a=x]', root).onclick = closeLayer;
   $('[data-a=in]', root).onclick = function () { zoom(1.5); };
