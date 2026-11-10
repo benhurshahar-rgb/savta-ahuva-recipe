@@ -689,7 +689,7 @@ SCREENS.addScan = function () {
     + '<p style="font-size:16px;line-height:1.55;margin:4px 0 14px">מצלמים את הדף ישר ובאור טוב. אפשר לצלם כמה דפים של אותו מתכון יחד.</p>'
     + '<div style="display:flex;flex-direction:column;gap:10px"><button class="btn solid big" data-a="cam">' + ic('cam', 20, '#FBF4E4', 2) + 'לצלם עכשיו</button>'
     + '<button class="btn big" data-a="gal">' + ic('img', 20, '#5B3A1E', 2) + 'לבחור תמונות מהגלריה</button></div>'
-    + (CFG.geminiKey ? '' : '<p class="dup" style="margin-top:12px">קריאת כתב היד עוד לא הופעלה בגרסה הזו. אפשר לצלם, ואז למלא את המתכון ידנית.</p>')
+    + (CFG.geminiKey ? '' : '<p class="dup" style="margin-top:12px">' + (CFG.web ? 'קריאה אוטומטית של כתב היד זמינה באפליקציה בטלפון. כאן אפשר לצרף תמונה ולמלא את המתכון ידנית.' : 'קריאת כתב היד עוד לא הופעלה בגרסה הזו. אפשר לצלם, ואז למלא את המתכון ידנית.') + '</p>')
     + '</div><div id="shots" class="thumbs hs"></div><div id="results"></div></div>';
 };
 BIND.addScan = function (el) {

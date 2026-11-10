@@ -1,0 +1,35 @@
+name: Publish web version
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Write web config (Firebase only; handwriting reading stays in the Android app)
+        run: |
+          cat > www/config.js <<'CFG'
+          window.CONFIG = { firebase: { apiKey: "AIzaSyCkkGThGYjXC5ng3M3QetDJgFI-DzGbiLo", authDomain: "savta-recipes.firebaseapp.com", projectId: "savta-recipes", storageBucket: "savta-recipes.firebasestorage.app", messagingSenderId: "80825324616", appId: "1:80825324616:web:fa16cf150084e6ecfdf47d" }, geminiKey: "", web: true };
+          CFG
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: www
+      - id: deployment
+        uses: actions/deploy-pages@v4
