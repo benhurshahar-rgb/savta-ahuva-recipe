@@ -21,6 +21,7 @@ var P = {
   merge: '<path d="M7 4v6a4 4 0 004 4h6"/><path d="M14 11l3 3-3 3"/><path d="M7 20v-3"/>',
   check: '<path d="M5 12l5 5 9-10"/>', minus: '<path d="M5 12h14"/>',
   img: '<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-8 8"/>',
+  menu: '<path d="M4 7h16M4 12h16M4 17h16"/>', zin: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5l5 5M7.5 10.5h6M10.5 7.5v6"/>', zout: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5l5 5M7.5 10.5h6"/>',
   trash: '<path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13"/>', link: '<path d="M10 14a4 4 0 006 0l3-3a4 4 0 00-6-6l-1 1"/><path d="M14 10a4 4 0 00-6 0l-3 3a4 4 0 006 6l1-1"/>'
 };
 function ic(n, size, color, sw) { return '<svg width="' + (size || 22) + '" height="' + (size || 22) + '" viewBox="0 0 24 24" fill="none" stroke="' + (color || 'currentColor') + '" stroke-width="' + (sw || 1.8) + '" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + P[n] + '</svg>'; }
@@ -58,7 +59,7 @@ function readFile(file, as) {
   return new Promise(function (res, rej) { var r = new FileReader(); r.onload = function () { res(r.result); }; r.onerror = rej; r[as || 'readAsDataURL'](file); });
 }
 function compress(file, max, q) {
-  return readFile(file).then(function (url) {
+  return (typeof file === 'string' ? Promise.resolve(file) : readFile(file)).then(function (url) {
     return new Promise(function (res, rej) {
       var im = new Image();
       im.onload = function () {
@@ -151,6 +152,72 @@ function idxOf(k) { var v = vis(); for (var i = 0; i < v.length; i++) if (v[i].k
 var stage = $('#stage'), layer = $('#layer');
 var nav = [{ name: 'cover' }], ui = { q: '', chip: -1, editing: null, note: null };
 var formOpen = false, pendingRender = false;
+/* ---- text size (zoom) for easier reading: +/- buttons and two-finger pinch */
+var ZOOM = 1;
+try { ZOOM = parseFloat(localStorage.getItem('savta-zoom')) || 1; } catch (e) {}
+function setZoom(z, save) {
+  ZOOM = Math.max(0.85, Math.min(2.2, Math.round(z * 100) / 100));
+  document.documentElement.style.setProperty('--zoom', ZOOM);
+  if (save !== false) { try { localStorage.setItem('savta-zoom', ZOOM); } catch (e) {} }
+}
+setZoom(ZOOM, false);
+function zoomCtl(kind) {
+  return '<div class="zoomctl' + (kind === 'float' ? ' float' : '') + '"><button data-z="-1" aria-label="להקטין את הכתב">' + ic('zout', 26, '#5B3A1E', 2.2) + '</button>'
+    + '<span>גודל כתב</span><button data-z="1" aria-label="להגדיל את הכתב">' + ic('zin', 26, '#5B3A1E', 2.2) + '</button></div>';
+}
+function bindZoom(el) {
+  $$('[data-z]', el).forEach(function (b) { b.onclick = function () { setZoom(ZOOM * (b.dataset.z > 0 ? 1.15 : 1 / 1.15)); }; });
+}
+(function pinch() {
+  var d0 = 0, z0 = 1;
+  function dist(t) { return Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY); }
+  document.addEventListener('touchstart', function (e) { if (e.touches.length === 2 && !layer.firstChild) { d0 = dist(e.touches); z0 = ZOOM; ui.pinched = true; } }, { passive: true });
+  document.addEventListener('touchmove', function (e) {
+    if (e.touches.length === 2 && d0 && !layer.firstChild) { e.preventDefault(); setZoom(z0 * dist(e.touches) / d0, false); }
+  }, { passive: false });
+  document.addEventListener('touchend', function (e) { if (d0 && e.touches.length < 2) { d0 = 0; setZoom(ZOOM); setTimeout(function () { ui.pinched = false; }, 300); } }, { passive: true });
+})();
+
+/* ---- side menu with all chapters and recipes */
+function drawer() {
+  var V = vis(), html = '<div class="drawer-bg fade-in"><nav class="drawer paper" aria-label="פרקים"><div class="dhead">' + logo(44)
+    + '<b>כל הפרקים</b><button class="round" data-a="x" aria-label="לסגור">' + ic('x', 22, '#5B3A1E', 2.2) + '</button></div><div class="dlist">';
+  CH_ORDER.forEach(function (c) {
+    var list = V.filter(function (r) { return r.chId === c; });
+    html += '<details><summary><span>' + esc(CH[c]) + '</span><i>' + list.length + '</i></summary>'
+      + '<button class="dch" data-ch="' + c + '">לכל הפרק ←</button>'
+      + list.map(function (r) { return '<button class="drow" data-k="' + esc(r.k) + '"><b>' + r.n + '</b>' + esc(r.title) + '</button>'; }).join('') + '</details>';
+  });
+  html += '</div></nav></div>';
+  layer.innerHTML = html;
+  var bg = $('.drawer-bg', layer);
+  bg.onclick = function (e) { if (e.target === bg) closeLayer(); };
+  $('[data-a=x]', bg).onclick = closeLayer;
+  $$('[data-ch]', bg).forEach(function (b) { b.onclick = function () {
+    closeLayer(); ui.chip = -1; ui.q = ''; ui.jump = +b.dataset.ch; ui.editing = null;
+    nav = [{ name: 'cover' }, { name: 'contents' }]; show('fade');
+  }; });
+  $$('[data-k]', bg).forEach(function (b) { b.onclick = function () {
+    closeLayer(); ui.editing = null; ui.note = null;
+    nav = [{ name: 'cover' }, { name: 'contents' }, { name: 'recipe', k: b.dataset.k }]; show('fade');
+  }; });
+}
+
+/* ---- new app version available? */
+var latestTag = null;
+function showUpdate(el) {
+  var box = $('#upd', el); if (!box || !CFG.version) return;
+  function render() {
+    if (!latestTag || latestTag === 'v' + CFG.version) return;
+    box.innerHTML = '<div class="upd"><span>יש גרסה חדשה של האפליקציה</span><button class="btn solid" data-a="get">להוריד</button></div>';
+    $('[data-a=get]', box).onclick = function () { location.href = 'https://github.com/benhurshahar-rgb/savta-ahuva-recipe/releases/latest/download/savta-recipes.apk'; };
+  }
+  if (latestTag) return render();
+  fetch('https://api.github.com/repos/benhurshahar-rgb/savta-ahuva-recipe/releases/latest').then(function (r) { return r.json(); })
+    .then(function (j) { latestTag = j.tag_name || null; render(); }).catch(function () {});
+}
+
+function goHome() { closeLayer(); ui.editing = null; nav = [{ name: 'cover' }, { name: 'contents' }]; show('back'); }
 function cur() { return nav[nav.length - 1]; }
 function go(v, anim) { nav.push(v); show(anim); }
 function replace(v, anim) { nav[nav.length - 1] = v; show(anim); }
@@ -162,9 +229,10 @@ function back() {
 }
 function dataChanged() { visCache = null; if (formOpen) { pendingRender = true; return; } show(null, true); }
 
+var curEl = null;
 function show(anim, keepScroll) {
   visCache = null;
-  var v = cur(), old = stage.firstElementChild;
+  var v = cur(), old = curEl && curEl.parentNode === stage ? curEl : null;
   var scrollTop = keepScroll && old && $('.scroll', old) ? $('.scroll', old).scrollTop : 0;
   var el = document.createElement('div');
   el.className = 'screen linen';
@@ -173,17 +241,27 @@ function show(anim, keepScroll) {
   if (v.name === 'cover') el.classList.add('cover');
   formOpen = !!(ui.editing || /^add/.test(v.name));
   pendingRender = false;
-  if (old && anim === 'next') {
-    stage.appendChild(el); stage.appendChild(old);
-    old.classList.add('turn-out'); old.style.transformOrigin = 'right center';
-    setTimeout(function () { old.remove(); }, 640);
-  } else if (old && anim === 'back') {
-    stage.appendChild(old); el.style.transformOrigin = 'right center'; el.classList.add('turn-back'); stage.appendChild(el);
-    setTimeout(function () { old.remove(); el.classList.remove('turn-back'); }, 640);
+  // finish any running transition: keep only the newest screen
+  Array.prototype.slice.call(stage.children).forEach(function (c) { if (c !== old) c.remove(); });
+  if (old) { old.className = old.className.replace(/\s*(turn-out|turn-in)/g, ''); old.style.zIndex = ''; }
+  if (old && (anim === 'next' || anim === 'back')) {
+    var mover = anim === 'next' ? old : el, still = anim === 'next' ? el : old;
+    stage.innerHTML = ''; stage.appendChild(still); stage.appendChild(mover);
+    still.style.zIndex = 1; mover.style.zIndex = 2;
+    mover.classList.add(anim === 'next' ? 'turn-out' : 'turn-in');
+    var done = false, fin = function () {
+      if (done) return; done = true;
+      if (curEl !== el) return;
+      Array.prototype.slice.call(stage.children).forEach(function (c) { if (c !== el) c.remove(); });
+      el.classList.remove('turn-in'); el.style.zIndex = '';
+    };
+    mover.addEventListener('animationend', fin, { once: true });
+    setTimeout(fin, 700);
   } else {
     stage.innerHTML = ''; stage.appendChild(el);
     if (anim === 'fade') el.classList.add('fade-in');
   }
+  curEl = el;
   if (keepScroll && $('.scroll', el)) $('.scroll', el).scrollTop = scrollTop;
   (BIND[v.name] || function () {})(el, v);
 }
@@ -197,13 +275,13 @@ function miniCard(title, icon, x, y, rot, w) {
 SCREENS.cover = function () {
   var n = vis().length;
   return '<div class="cork" aria-hidden="true"><svg width="580" height="580" style="position:absolute;inset:0"><rect width="580" height="580" filter="url(#cork)"/></svg></div>'
-    + miniCard('סלט עגבניות מבושל', 'salad', '4%', 40, -10) + miniCard('עוגת שוקולד', 'sweet', 'calc(96% - 118px)', 46, 9) + miniCard('מרק קובה', 'soup', 'calc(50% - 56px)', 14, 2, 112)
+    + miniCard('סופריטו', 'meat', '4%', 40, -10) + miniCard('חצילים מטוגנים', 'vegan', 'calc(96% - 118px)', 46, 9) + miniCard('מרק קובה', 'soup', 'calc(50% - 56px)', 14, 2, 112)
     + '<div class="cover-inner"><img class="cover-logo" src="' + LOGO + '" alt="המתכונים של סבתא, ציור של סבתא אהובה">'
     + '<div class="welcome paper frame">' + GRAIN
-    + '<h1>ברוכים הבאים</h1>' + ornament(150)
-    + '<p>כל המתכונים מהמחברת של סבתא אהובה, כתובים מחדש ומסודרים בכרטיסים. מבשלים, טועמים, ומוסיפים מתכונים חדשים. בתיאבון!</p>'
-    + '<span class="meta">' + n + ' מתכונים · ' + CH_ORDER.length + ' פרקים</span>'
-    + '<button class="btn solid big" data-a="open">לפתוח את הספר' + ic('next', 18, '#FBF4E4', 2.2) + '</button>'
+    + ornament(150)
+    + '<p class="lead">כל המתכונים של סבתא אהובה, באוסף אחד ומיוחד: ' + n + ' מתכונים של כל הדברים הכי טעימים בעולם, בדיוק כמו שרק סבתא יודעת להכין!</p>'
+    + ornament(150)
+    + '<button class="btn solid big" data-a="open">כניסה' + ic('next', 18, '#FBF4E4', 2.2) + '</button>'
     + '</div></div>';
 };
 BIND.cover = function (el) { $('[data-a=open]', el).onclick = function () { go({ name: 'contents' }, 'next'); }; };
@@ -220,7 +298,7 @@ function cardsHtml() {
     if (ui.chip !== -1 && ui.chip !== c) return;
     var list = V.filter(function (r) { return r.chId === c && matches(r, q); });
     if (!list.length) return;
-    out += '<div class="sec-h"><h2>' + esc(CH[c]) + '</h2><i></i><span>' + list.length + '</span></div><div class="grid">';
+    out += '<div class="sec-h" id="ch' + c + '"><h2>' + esc(CH[c]) + '</h2><i></i><span>' + list.length + '</span></div><div class="grid">';
     list.forEach(function (r) {
       out += '<button class="card paper frame" data-k="' + esc(r.k) + '"><span class="num">' + r.n + '</span>'
         + '<img class="' + (r.photo ? 'ph' : 'il') + '" src="' + esc(r.img) + '" alt="" loading="lazy" style="object-position:' + esc(r.pos) + '">'
@@ -233,22 +311,25 @@ function cardsHtml() {
 }
 SCREENS.contents = function () {
   var chips = '<button class="chip" data-c="-1" aria-pressed="' + (ui.chip === -1) + '">הכול</button>' + CH_ORDER.map(function (c) { return '<button class="chip" data-c="' + c + '" aria-pressed="' + (ui.chip === c) + '">' + esc(CH[c]) + '</button>'; }).join('');
-  return '<div class="top"><button data-a="cover" aria-label="לכריכה" style="border:0;background:none;padding:0;border-radius:50%">' + logo(52) + '</button>'
+  return '<div class="top">' + '<button class="round paper" data-a="menu" aria-label="תפריט פרקים">' + ic('menu', 24, '#5B3A1E', 2) + '</button>' + '<button data-a="cover" aria-label="לכריכה" style="border:0;background:none;padding:0;border-radius:50%">' + logo(46) + '</button>'
     + '<div style="flex:1;display:flex;flex-direction:column;line-height:1.05"><span class="kicker">סבתא אהובה</span><h1>כל המתכונים</h1><span class="sync">' + syncLabel() + '</span></div>'
     + '<div class="count paper"><b>' + vis().length + '</b><span>מתכונים</span></div></div>'
     + '<div style="display:flex;gap:8px;padding:2px 18px 8px;align-items:center"><label class="search">' + ic('search', 22, '#5B3A1E', 2.2)
     + '<input type="search" aria-label="חיפוש מתכון" placeholder="לחפש מתכון או מצרך…" value="' + esc(ui.q) + '"></label>'
     + '<button class="round solid" data-a="scan" aria-label="לצלם מתכון">' + ic('cam', 24, '#FBF4E4', 2) + '</button></div>'
     + '<div class="chips hs">' + chips + '</div>'
-    + '<div class="scroll" style="padding:0 14px 24px">'
+    + '<div id="upd"></div><div class="scroll" style="padding:0 14px 84px"><div class="zm">'
     + '<button class="addnew" data-a="add">' + ic('plus', 22, '#5B3A1E', 2) + 'להוסיף מתכון חדש</button>'
     + '<div id="cards">' + cardsHtml() + '</div>'
     + '<div class="pending paper frame"><h2 style="margin:0 0 6px;font-family:var(--script);font-weight:400;font-size:26px;color:var(--brown)">דפים שעוד לא נכנסו</h2>'
     + '<p style="margin:0 0 8px;font-size:15px;line-height:1.5">שמות שמופיעים במחברת בלי מתכון, או שהכתב דהוי מדי. סבתא תשלים אותם.</p><div>'
-    + PENDING.map(function (p) { return '<span class="pill">' + esc(p) + '</span>'; }).join('') + '</div></div></div>';
+    + PENDING.map(function (p) { return '<span class="pill">' + esc(p) + '</span>'; }).join('') + '</div></div></div></div>' + zoomCtl('float');
 };
 BIND.contents = function (el) {
   $('[data-a=cover]', el).onclick = function () { nav = [{ name: 'cover' }]; show('back'); };
+  $('[data-a=menu]', el).onclick = drawer;
+  bindZoom(el); showUpdate(el);
+  if (ui.jump != null) { var j = ui.jump; ui.jump = null; setTimeout(function () { var h = $('#ch' + j, el); if (h) $('.scroll', el).scrollTop = h.getBoundingClientRect().top - $('.scroll', el).getBoundingClientRect().top + $('.scroll', el).scrollTop - 8; }, 30); }
   $('[data-a=add]', el).onclick = function () { go({ name: 'add' }, 'fade'); };
   $('[data-a=scan]', el).onclick = function () { go({ name: 'addScan' }, 'fade'); };
   var inp = $('input[type=search]', el), cards = $('#cards', el);
@@ -260,7 +341,7 @@ BIND.contents = function (el) {
 
 function groupsHtml(groups) {
   return groups.map(function (g) {
-    return (g.name ? '<h3 class="grp">' + esc(g.name) + '</h3>' : '') + '<ul class="ing">' + g.items.map(function (i) { return '<li><span>' + esc(i) + '</span></li>'; }).join('') + '</ul>';
+    return (g.name ? '<h3 class="grp">' + esc(g.name) + '</h3>' : '') + '<ul class="ing">' + g.items.map(function (i) { return '<li>' + window.INGREDIENT_ICON(i) + '<span>' + esc(i) + '</span></li>'; }).join('') + '</ul>';
   }).join('');
 }
 function stepsHtml(steps) { return '<ol class="steps">' + steps.map(function (s, i) { return '<li><b>' + (i + 1) + '.</b><span>' + esc(s) + '</span></li>'; }).join('') + '</ol>'; }
@@ -273,10 +354,10 @@ SCREENS.recipe = function (v) {
   if (r.suggest && !S.merges[r.k]) { var si = idxOf(r.suggest); if (si >= 0) sug = V[si]; }
   var children = all().filter(function (x) { return S.merges[x.k] === r.k; });
   var h = '<div class="top" style="justify-content:space-between;padding:12px 16px 6px">'
-    + '<button class="round paper" data-a="contents" aria-label="לכל המתכונים">' + ic('grid', 22, '#5B3A1E') + '</button>'
+    + '<button class="round paper" data-a="menu" aria-label="תפריט פרקים">' + ic('menu', 24, '#5B3A1E', 2) + '</button>'
     + '<div style="display:flex;flex-direction:column;align-items:center;line-height:1.1"><span class="kicker">' + esc(r.ch) + '</span><span style="font-size:15px;color:var(--brown)">מתכון ' + r.n + ' מתוך ' + V.length + '</span></div>'
-    + logo(46) + '</div>'
-    + '<div class="rcard paper frame">' + GRAIN + '<div class="scroll">'
+    + '<button data-a="home" aria-label="לכל המתכונים" style="border:0;background:none;padding:0;border-radius:50%">' + logo(46) + '</button></div>'
+    + '<div class="rcard paper frame">' + GRAIN + '<div class="scroll"><div class="zm">'
     + '<div class="hero"><img class="' + (r.photo ? 'ph' : 'il') + '" src="' + esc(r.img) + '" alt="' + esc(r.title) + '" style="object-position:' + esc(r.pos) + '">'
     + '<button class="swap" data-a="photo">' + ic('cam', 16, '#5B3A1E', 2) + (r.own ? 'להחליף שוב' : 'להחליף תמונה') + '</button>'
     + (r.credit ? '<span class="credit">' + esc(r.credit) + '</span>' : '') + '</div>'
@@ -285,8 +366,8 @@ SCREENS.recipe = function (v) {
     + (ui.note && ui.note.k === r.k ? '<div class="note">' + esc(ui.note.t) + '</div>' : '');
   if (editing) h += editForm(r);
   else {
-    h += '<div class="actions"><button class="btn" data-a="edit">' + ic('pen', 16, '#5B3A1E', 2) + 'לערוך ולתקן</button><button class="btn" data-a="merge">' + ic('merge', 16, '#5B3A1E', 2) + 'לשלב במתכון אחר</button></div>';
-    if (sug) h += '<div class="suggest"><span>נראה שזה שייך ל־<b>״' + esc(sug.title) + '״</b> (מתכון ' + sug.n + ')</span><button class="btn solid" data-a="sug">' + ic('merge', 16, '#FBF4E4', 2) + 'לשלב שם</button></div>';
+    h += '<div class="actions"><button class="btn" data-a="edit">' + ic('pen', 16, '#5B3A1E', 2) + 'לערוך ולתקן</button><button class="btn" data-a="merge">' + 'לשלב במתכון אחר</button></div>';
+    if (sug) h += '<div class="suggest"><span>נראה שזה שייך ל־<b>״' + esc(sug.title) + '״</b> (מתכון ' + sug.n + ')</span><button class="btn solid" data-a="sug">' + 'לשלב שם</button></div>';
     h += '<section>' + heading('מצרכים') + groupsHtml(r.groups) + '</section>'
       + '<section>' + heading('אופן ההכנה') + stepsHtml(r.steps) + '</section>'
       + (r.tip ? '<p class="tip"><b>טיפ של סבתא · </b>' + esc(r.tip) + '</p>' : '');
@@ -299,9 +380,9 @@ SCREENS.recipe = function (v) {
   if (pages.length) h += '<section>' + heading('מהמחברת') + '<p style="margin:0 0 2px;text-align:center;font-size:13px;color:var(--muted)">לוחצים על הדף כדי לראות אותו בגדול</p><div class="thumbs hs">'
     + pages.map(function (p, j) { return '<button data-page="' + j + '" aria-label="לפתוח את הדף המקורי בגדול" style="transform:rotate(' + (j % 2 ? 4 : -4) + 'deg)"><img src="' + esc(p) + '" alt="דף מהמחברת" loading="lazy"></button>'; }).join('') + '</div></section>';
   if (r.added && !editing) h += '<div style="text-align:center;margin-top:8px"><button class="btn" data-a="delete">' + ic('trash', 16, '#9A4F24', 2) + 'למחוק את המתכון</button></div>';
-  h += '</div></div>'
+  h += '</div></div></div>'
     + '<div class="navbar"><button class="round paper" data-a="prev" aria-label="לכרטיס הקודם"' + (i === 0 ? ' disabled style="opacity:.4"' : '') + '>' + ic('back', 22, '#5B3A1E', 2) + '</button>'
-    + '<span>מחליקים כדי לדפדף</span>'
+    + zoomCtl()
     + '<button class="round solid" data-a="next" aria-label="לכרטיס הבא"' + (i === V.length - 1 ? ' disabled style="opacity:.4"' : '') + '>' + ic('next', 22, '#FBF4E4', 2.2) + '</button></div>';
   return h;
 };
@@ -329,7 +410,7 @@ function editForm(r) {
 BIND.recipe = function (el, v) {
   var V = vis(), i = idxOf(v.k), r = V[i];
   function a(n, f) { var b = $('[data-a=' + n + ']', el); if (b) b.onclick = f; }
-  a('contents', function () { if (nav.length > 1 && nav[nav.length - 2].name === 'contents') back(); else replace({ name: 'contents' }, 'back'); });
+  a('home', goHome); a('menu', drawer); bindZoom(el);
   function step(d) { var j = i + d; if (j < 0 || j >= V.length) return; ui.editing = null; ui.note = null; replace({ name: 'recipe', k: V[j].k }, d > 0 ? 'next' : 'back'); }
   a('prev', function () { step(-1); }); a('next', function () { step(1); });
   a('edit', function () { ui.editing = r.k; ui.note = null; show(null, true); });
@@ -352,7 +433,7 @@ BIND.recipe = function (el, v) {
   var sx = null, sy = null, card = $('.rcard', el);
   card.addEventListener('touchstart', function (e) { if (ui.editing) return; sx = e.touches[0].clientX; sy = e.touches[0].clientY; }, { passive: true });
   card.addEventListener('touchend', function (e) {
-    if (sx == null) return; var dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy; sx = null;
+    if (sx == null || ui.pinched || e.touches.length) { sx = null; return; } var dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy; sx = null;
     if (Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.6) step(dx > 0 ? 1 : -1);
   }, { passive: true });
 };
@@ -385,6 +466,17 @@ function mergeSheet(r) {
   inp.oninput = fill; fill();
   $('[data-a=close]', el).onclick = closeLayer;
 }
+function nativeCamera() {
+  var C = window.Capacitor, Cam = C && C.isNativePlatform && C.isNativePlatform() && C.Plugins && C.Plugins.Camera;
+  return Cam || null;
+}
+/* returns Promise<[File|dataURL]> */
+function takePhoto() {
+  var Cam = nativeCamera();
+  if (!Cam) return pickFile('image/*', true);
+  return Cam.getPhoto({ quality: 85, resultType: 'dataUrl', source: 'CAMERA', correctOrientation: true, saveToGallery: false, width: 2000 })
+    .then(function (p) { return p && p.dataUrl ? [p.dataUrl] : []; }, function (e) { console.warn(e); return []; });
+}
 function pickFile(accept, capture, multiple) {
   return new Promise(function (res) {
     var i = document.createElement('input'); i.type = 'file'; i.accept = accept; if (capture) i.setAttribute('capture', 'environment'); if (multiple) i.multiple = true;
@@ -404,7 +496,7 @@ function photoSheet(r) {
     compress(files[0], 1000, 0.72).then(function (d) { return put('photos', r.k, { data: d, credit: 'צילום של המשפחה' }); })
       .then(function () { done(); ui.note = { k: r.k, t: 'התמונה הוחלפה.' }; show(null, true); }, function () { done(); toast('לא הצלחנו לקרוא את התמונה'); });
   }
-  $('[data-a=cam]', el).onclick = function () { pickFile('image/*', true).then(use); };
+  $('[data-a=cam]', el).onclick = function () { takePhoto().then(use); };
   $('[data-a=gal]', el).onclick = function () { pickFile('image/*').then(use); };
   if ($('[data-a=reset]', el)) $('[data-a=reset]', el).onclick = function () { del('photos', r.k); closeLayer(); show(null, true); };
   $('[data-a=close]', el).onclick = closeLayer;
@@ -448,12 +540,12 @@ function viewer(pages, i) {
 /* ---------------------------------------------------------------- add recipe */
 function addTop(title) {
   return '<div class="top"><button class="round paper" data-a="back" aria-label="חזרה">' + ic('back', 22, '#5B3A1E', 2) + '</button>'
-    + '<div style="flex:1;display:flex;flex-direction:column;line-height:1.05"><span class="kicker">מתכון חדש</span><h1>' + esc(title) + '</h1></div>' + logo(46) + '</div>';
+    + '<div style="flex:1;display:flex;flex-direction:column;line-height:1.05"><span class="kicker">מתכון חדש</span><h1>' + esc(title) + '</h1></div><button data-a="home" aria-label="לכל המתכונים" style="border:0;background:none;padding:0;border-radius:50%">' + logo(46) + '</button></div>';
 }
-function bindBack(el) { $('[data-a=back]', el).onclick = function () { back(); }; }
+function bindBack(el) { $('[data-a=back]', el).onclick = function () { back(); }; $('[data-a=home]', el).onclick = goHome; bindZoom(el); }
 SCREENS.add = function () {
   function opt(a, icon, t, d) { return '<button class="opt paper frame" data-a="' + a + '">' + GRAIN + '<span class="ic">' + ic(icon, 26, '#FBF4E4', 2) + '</span><span><b>' + t + '</b><small>' + d + '</small></span></button>'; }
-  return addTop('להוסיף מתכון') + '<div class="scroll" style="padding:8px 16px 24px">'
+  return addTop('להוסיף מתכון') + '<div class="scroll" style="padding:8px 16px 24px"><div class="zm">'
     + opt('write', 'pen', 'לכתוב בעצמי', 'תבנית פשוטה: שם, מצרכים, אופן ההכנה.')
     + opt('scan', 'cam', 'לצלם דף מהמחברת', 'מצלמים את הדף, והאפליקציה קוראת את כתב היד וממלאת לבד. אפשר לבדוק ולתקן לפני השמירה.')
     + opt('file', 'doc', 'מקובץ או ממסמך', 'קובץ וורד מהטלפון, או קישור למסמך של גוגל.')
@@ -466,7 +558,7 @@ BIND.add = function (el) {
   $('[data-a=file]', el).onclick = function () { replace({ name: 'addFile' }, 'fade'); };
 };
 SCREENS.addWrite = function () {
-  return addTop('לכתוב מתכון') + '<div class="scroll" style="padding:8px 16px 24px"><form class="edit-box paper frame" onsubmit="return false" style="background:none">'
+  return addTop('לכתוב מתכון') + '<div class="scroll" style="padding:8px 16px 24px"><div class="zm"><form class="edit-box paper frame" onsubmit="return false" style="background:none">'
     + '<div style="position:relative;z-index:1;display:flex;flex-direction:column;gap:12px">' + recipeFields({ title: '', chId: 0, tags: [], groups: [], steps: [], tip: '' })
     + '<button class="btn solid big" data-a="save">' + ic('check', 18, '#FBF4E4', 2.2) + 'לשמור בספר</button></div></form></div>';
 };
@@ -533,7 +625,7 @@ function findDup(title) {
 }
 
 SCREENS.addScan = function () {
-  return addTop('לצלם דף') + '<div class="scroll" style="padding:8px 16px 24px" id="scanbody">'
+  return addTop('לצלם דף') + '<div class="scroll" style="padding:8px 16px 24px" id="scanbody"><div class="zm">'
     + '<div class="found paper frame" style="text-align:center">' + GRAIN
     + '<p style="font-size:16px;line-height:1.55;margin:4px 0 14px">מצלמים את הדף ישר ובאור טוב. אפשר לצלם כמה דפים של אותו מתכון יחד.</p>'
     + '<div style="display:flex;flex-direction:column;gap:10px"><button class="btn solid big" data-a="cam">' + ic('cam', 20, '#FBF4E4', 2) + 'לצלם עכשיו</button>'
@@ -553,7 +645,7 @@ BIND.addScan = function (el) {
       read();
     }, function () { done(); toast('לא הצלחנו לפתוח את התמונה'); });
   }
-  $('[data-a=cam]', el).onclick = function () { pickFile('image/*', true).then(got); };
+  $('[data-a=cam]', el).onclick = function () { takePhoto().then(got); };
   $('[data-a=gal]', el).onclick = function () { pickFile('image/*', false, true).then(got); };
   function read() {
     if (!CFG.geminiKey) { review(el, [cleanRecipe({ title: '', steps: [] })], shots); return; }
@@ -609,7 +701,7 @@ function review(el, recipes, shots) {
 }
 
 SCREENS.addFile = function () {
-  return addTop('מקובץ') + '<div class="scroll" style="padding:8px 16px 24px">'
+  return addTop('מקובץ') + '<div class="scroll" style="padding:8px 16px 24px"><div class="zm">'
     + '<div class="found paper frame">' + GRAIN + '<div style="display:flex;flex-direction:column;gap:12px">'
     + '<b style="font-family:var(--script);font-weight:400;font-size:26px;color:var(--brown)">קובץ מהטלפון</b>'
     + '<p style="margin:0;font-size:15px">קובץ Word מסוג docx, או קובץ טקסט.</p>'

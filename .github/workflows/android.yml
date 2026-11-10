@@ -46,7 +46,8 @@ jobs:
               messagingSenderId: "80825324616",
               appId: "1:80825324616:web:fa16cf150084e6ecfdf47d"
             },
-            geminiKey: process.env.GEMINI_API_KEY || ""
+            geminiKey: process.env.GEMINI_API_KEY || "",
+            version: "1.${{ github.run_number }}"
           };
           fs.writeFileSync("www/config.js", "window.CONFIG = " + JSON.stringify(cfg) + ";\n");
           console.log("gemini key present:", !!cfg.geminiKey);
