@@ -301,10 +301,12 @@ SCREENS.cover = function () {
     + '<p class="lead"><span>כל המתכונים של סבתא אהובה</span><span>באוסף אחד ומיוחד:</span><span>' + n + ' מתכונים של המאכלים הכי טעימים</span><span>בדיוק כמו שרק סבתא יודעת להכין!</span></p>'
     + ornament(150)
     + '</div>'
+    + '<div class="doodles" aria-hidden="true">' + ['soup', 'salad', 'sweet', 'fish', 'pie', 'chicken', 'ricebowl', 'meatballs'].map(function (k, i) {
+        return '<img src="' + ILL[k] + '" alt="" style="transform:rotate(' + [-8, 6, -4, 9, 5, -7, 8, -5][i] + 'deg)">'; }).join('') + '</div>'
     + '<button class="enter" data-a="open"><span class="enter-in">כניסה' + ic('next', 30, '#FBF4E4', 2.4) + '</span></button>'
     + '</div>';
 };
-BIND.cover = function (el) { $('[data-a=open]', el).onclick = function () { go({ name: 'contents' }, 'stir'); }; };
+BIND.cover = function (el) { $('[data-a=open]', el).onclick = function () { go({ name: 'contents' }, 'next'); }; };
 
 function matches(r, q) {
   if (!q) return true;
