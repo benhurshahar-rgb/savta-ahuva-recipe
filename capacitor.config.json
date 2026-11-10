@@ -1,6 +1,6 @@
 {
   "appId": "com.savtaahuva.recipes",
-  "appName": "מתכוני סבתא",
+  "appName": "מתכונים",
   "webDir": "www",
   "android": {
     "allowMixedContent": false

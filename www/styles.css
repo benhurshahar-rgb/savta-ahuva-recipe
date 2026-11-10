@@ -200,3 +200,5 @@ textarea.inp{min-height:140px;resize:vertical}
 /* update banner */
 .upd{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 14px 8px;padding:8px 8px 8px 14px;border-radius:999px;background:#EFD9A6;color:var(--rust);font-weight:700;font-size:15px}
 .upd span{padding-right:8px}
+.zoomctl .zreset{width:auto;height:46px;border-radius:999px;padding:0 10px;font-family:var(--serif);font-size:13px;font-weight:700;color:var(--muted);white-space:nowrap}
+.zoomctl .zreset.on{background:var(--brown);color:#FBF4E4;font-size:14px}

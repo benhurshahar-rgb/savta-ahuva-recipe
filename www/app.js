@@ -159,13 +159,16 @@ function setZoom(z, save) {
   ZOOM = Math.max(0.85, Math.min(2.2, Math.round(z * 100) / 100));
   document.documentElement.style.setProperty('--zoom', ZOOM);
   if (save !== false) { try { localStorage.setItem('savta-zoom', ZOOM); } catch (e) {} }
+  $$('.zreset').forEach(function (b) { b.textContent = zoomLabel(); b.classList.toggle('on', Math.abs(ZOOM - 1) >= 0.01); });
 }
 setZoom(ZOOM, false);
 function zoomCtl(kind) {
   return '<div class="zoomctl' + (kind === 'float' ? ' float' : '') + '"><button data-z="-1" aria-label="להקטין את הכתב">' + ic('zout', 26, '#5B3A1E', 2.2) + '</button>'
-    + '<span>גודל כתב</span><button data-z="1" aria-label="להגדיל את הכתב">' + ic('zin', 26, '#5B3A1E', 2.2) + '</button></div>';
+    + '<button class="zreset' + (Math.abs(ZOOM - 1) >= 0.01 ? ' on' : '') + '" data-zr="1">' + zoomLabel() + '</button><button data-z="1" aria-label="להגדיל את הכתב">' + ic('zin', 26, '#5B3A1E', 2.2) + '</button></div>';
 }
+function zoomLabel() { return Math.abs(ZOOM - 1) < 0.01 ? 'גודל כתב' : 'חזרה לרגיל'; }
 function bindZoom(el) {
+  $$('[data-zr]', el).forEach(function (b) { b.onclick = function () { setZoom(1); }; });
   $$('[data-z]', el).forEach(function (b) { b.onclick = function () { setZoom(ZOOM * (b.dataset.z > 0 ? 1.15 : 1 / 1.15)); }; });
 }
 (function pinch() {
@@ -279,7 +282,7 @@ SCREENS.cover = function () {
     + '<div class="cover-inner"><img class="cover-logo" src="' + LOGO + '" alt="המתכונים של סבתא, ציור של סבתא אהובה">'
     + '<div class="welcome paper frame">' + GRAIN
     + ornament(150)
-    + '<p class="lead">כל המתכונים של סבתא אהובה, באוסף אחד ומיוחד: ' + n + ' מתכונים של כל הדברים הכי טעימים בעולם, בדיוק כמו שרק סבתא יודעת להכין!</p>'
+    + '<p class="lead">כל המתכונים של סבתא אהובה, באוסף אחד ומיוחד:<br>' + n + ' מתכונים של כל הדברים הכי טעימים בעולם, בדיוק כמו שרק סבתא יודעת להכין!</p>'
     + ornament(150)
     + '<button class="btn solid big" data-a="open">כניסה' + ic('next', 18, '#FBF4E4', 2.2) + '</button>'
     + '</div></div>';
