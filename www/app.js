@@ -147,6 +147,12 @@ function vis() {
   list.forEach(function (r, i) { r.n = i + 1; });
   return (visCache = list);
 }
+var FAV = {};
+try { FAV = JSON.parse(localStorage.getItem('savta-favs') || '{}') || {}; } catch (e) {}
+function isFav(k) { return !!FAV[k]; }
+function toggleFav(k) { if (FAV[k]) delete FAV[k]; else FAV[k] = Date.now(); try { localStorage.setItem('savta-favs', JSON.stringify(FAV)); } catch (e) {} }
+function favList() { return vis().filter(function (r) { return FAV[r.k]; }); }
+var STAR = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.8z"/></svg>';
 function pendingCount() { return vis().filter(function (r) { return r.check; }).length; }
 function byKey(k) { var a = all(); for (var i = 0; i < a.length; i++) if (a[i].k === k) return a[i]; return null; }
 function idxOf(k) { var v = vis(); for (var i = 0; i < v.length; i++) if (v[i].k === k) return i; return -1; }
@@ -195,7 +201,8 @@ function drawer() {
       + list.map(function (r) { return '<button class="drow" data-k="' + esc(r.k) + '"><b>' + r.n + '</b>' + esc(r.title) + '</button>'; }).join('') + '</details>';
   });
   html += '</div></nav></div>';
-  var pcn = pendingCount();
+  var pcn = pendingCount(), fvn = favList().length;
+  html = html.replace('<div class="dlist">', '<div class="dlist"><button class="dfav" data-ch="-3">★ המועדפים שלי <i>' + fvn + '</i></button>');
   if (pcn) html = html.replace('<div class="dlist">', '<div class="dlist"><button class="dapprove" data-ch="-2">✓ לאישור של סבתא <i>' + pcn + '</i></button>');
   layer.innerHTML = html;
   var bg = $('.drawer-bg', layer);
@@ -203,7 +210,7 @@ function drawer() {
   $('[data-a=x]', bg).onclick = closeLayer;
   $$('[data-ch]', bg).forEach(function (b) { b.onclick = function () {
     closeLayer(); ui.q = ''; ui.editing = null;
-    if (+b.dataset.ch === -2) { ui.chip = -2; ui.jump = null; } else { ui.chip = -1; ui.jump = +b.dataset.ch; }
+    if (+b.dataset.ch < 0) { ui.chip = +b.dataset.ch; ui.jump = null; } else { ui.chip = -1; ui.jump = +b.dataset.ch; }
     nav = [{ name: 'cover' }, { name: 'contents' }]; show('fade');
   }; });
   $$('[data-k]', bg).forEach(function (b) { b.onclick = function () {
@@ -320,6 +327,11 @@ function matches(r, q) {
   if (norm(r.title).indexOf(q) !== -1) return true;
   return r.groups.some(function (g) { return g.items.some(function (i) { return norm(i).indexOf(q) !== -1; }); });
 }
+function cardHtml(r) {
+  return '<button class="card paper frame" data-k="' + esc(r.k) + '"><span class="num">' + r.n + '</span>' + (isFav(r.k) ? '<span class="cfav">' + STAR + '</span>' : '')
+    + '<img class="' + (r.photo ? 'ph' : 'il') + '" src="' + esc(r.img) + '" alt="" loading="lazy" style="object-position:' + esc(r.pos) + '">'
+    + '<span class="t">' + esc(r.title) + '</span>' + (r.check ? '<span class="chk">לאישור של סבתא</span>' : (r.needs ? '<span class="chk ok">✓ סבתא אישרה</span>' : '')) + '</button>';
+}
 function cardsHtml() {
   var V = vis(), q = ui.q.trim(), out = '';
   CH_ORDER.forEach(function (c) {
@@ -327,20 +339,24 @@ function cardsHtml() {
     var list = V.filter(function (r) { return r.chId === c && matches(r, q) && (ui.chip !== -2 || r.check); });
     if (!list.length) return;
     out += '<div class="sec-h" id="ch' + c + '"><h2>' + esc(CH[c]) + '</h2><i></i><span>' + list.length + '</span></div><div class="grid">';
-    list.forEach(function (r) {
-      out += '<button class="card paper frame" data-k="' + esc(r.k) + '"><span class="num">' + r.n + '</span>'
-        + '<img class="' + (r.photo ? 'ph' : 'il') + '" src="' + esc(r.img) + '" alt="" loading="lazy" style="object-position:' + esc(r.pos) + '">'
-        + '<span class="t">' + esc(r.title) + '</span>' + (r.check ? '<span class="chk">לאישור של סבתא</span>' : (r.needs ? '<span class="chk ok">✓ סבתא אישרה</span>' : '')) + '</button>';
-    });
+    list.forEach(function (r) { out += cardHtml(r); });
     out += '</div>';
   });
+  var favs = favList().filter(function (r) { return matches(r, q); });
+  if (ui.chip === -3) {
+    out = favs.length ? '<div class="sec-h"><h2>★ המועדפים שלי</h2><i></i><span>' + favs.length + '</span></div><div class="grid">' + favs.map(cardHtml).join('') + '</div>'
+      : '<div class="approve-intro paper frame fav-intro">' + GRAIN + '<b>★ המועדפים שלי</b><span>עוד אין מתכונים מועדפים. נכנסים למתכון שאוהבים ולוחצים על הכוכב שליד השם.</span></div>';
+  } else if (ui.chip === -1 && favs.length) {
+    out = '<div class="sec-h fav-h"><h2>★ המועדפים שלי</h2><i></i><span>' + favs.length + '</span></div><div class="grid">' + favs.map(cardHtml).join('') + '</div>' + out;
+  }
   if (ui.chip === -2) out = '<div class="approve-intro paper frame">' + GRAIN + '<b>לאישור של סבתא</b><span>' + (pendingCount() ? 'במתכונים האלה לא הייתי בטוח איך לקרוא את כתב היד. נכנסים לכל מתכון, משווים לדף מהמחברת, ולוחצים על ה־✓ הירוק. אם משהו לא נכון, לוחצים ״לתקן״.' : 'סבתא אישרה את כל המתכונים. תודה!') + '</span></div>' + out;
   if (!out) out = '<p style="text-align:center;font-size:17px;color:var(--muted);margin:30px 0">לא נמצא מתכון. אפשר לנסות מילה אחרת.</p>';
   return out;
 }
 SCREENS.contents = function () {
   var pc = pendingCount();
-  var chips = '<button class="chip" data-c="-1" aria-pressed="' + (ui.chip === -1) + '">הכול</button>' + (pc || ui.chip === -2 ? '<button class="chip approve-chip" data-c="-2" aria-pressed="' + (ui.chip === -2) + '">✓ לאישור של סבתא (' + pc + ')</button>' : '') + CH_ORDER.map(function (c) { return '<button class="chip" data-c="' + c + '" aria-pressed="' + (ui.chip === c) + '">' + esc(CH[c]) + '</button>'; }).join('');
+  var chips = '<button class="chip" data-c="-1" aria-pressed="' + (ui.chip === -1) + '">הכול</button>'
+    + '<button class="chip fav-chip" data-c="-3" aria-pressed="' + (ui.chip === -3) + '">★ מועדפים' + (favList().length ? ' (' + favList().length + ')' : '') + '</button>' + (pc || ui.chip === -2 ? '<button class="chip approve-chip" data-c="-2" aria-pressed="' + (ui.chip === -2) + '">✓ לאישור של סבתא (' + pc + ')</button>' : '') + CH_ORDER.map(function (c) { return '<button class="chip" data-c="' + c + '" aria-pressed="' + (ui.chip === c) + '">' + esc(CH[c]) + '</button>'; }).join('');
   return '<div class="top">' + '<button class="round paper" data-a="menu" aria-label="תפריט פרקים">' + ic('menu', 24, '#5B3A1E', 2) + '</button>' + '<button data-a="cover" aria-label="לכריכה" style="border:0;background:none;padding:0;border-radius:50%">' + logo(46) + '</button>'
     + '<div style="flex:1;display:flex;flex-direction:column;line-height:1.05"><span class="kicker">סבתא אהובה</span><h1>כל המתכונים</h1><span class="sync">' + syncLabel() + '</span></div>'
     + '<div class="count paper"><b>' + vis().length + '</b><span>מתכונים</span></div></div>'
@@ -391,7 +407,7 @@ SCREENS.recipe = function (v) {
     + '<div class="hero"><img class="' + (r.photo ? 'ph' : 'il') + '" src="' + esc(r.img) + '" alt="' + esc(r.title) + '" style="object-position:' + esc(r.pos) + '">'
     + '<button class="swap" data-a="photo">' + ic('cam', 16, '#5B3A1E', 2) + (r.own ? 'להחליף שוב' : 'להחליף תמונה') + '</button>'
     + (r.credit ? '<span class="credit">' + esc(r.credit) + '</span>' : '') + '</div>'
-    + '<h1 class="rtitle">' + esc(r.title) + '</h1>' + ornament()
+    + '<div class="title-row"><h1 class="rtitle">' + esc(r.title) + '</h1><button class="favbtn' + (isFav(r.k) ? ' on' : '') + '" data-a="fav" aria-pressed="' + isFav(r.k) + '" aria-label="' + (isFav(r.k) ? 'להוציא מהמועדפים' : 'להוסיף למועדפים') + '">' + STAR + '</button></div>' + ornament()
     + '<div class="tags">' + r.tags.map(function (t) { return '<span class="tag">' + esc(t) + '</span>'; }).join('') + '</div>'
     + (ui.note && ui.note.k === r.k ? '<div class="note">' + esc(ui.note.t) + '</div>' : '');
   if (editing) h += editForm(r);
@@ -456,6 +472,7 @@ BIND.recipe = function (el, v) {
     ui.editing = null; ui.note = { k: r.k, t: 'נשמר. תודה סבתא!' }; show(null, true);
   });
   a('merge', function () { mergeSheet(r); });
+  a('fav', function () { toggleFav(r.k); var b = $('[data-a=fav]', el), on = isFav(r.k); b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); b.setAttribute('aria-label', on ? 'להוציא מהמועדפים' : 'להוסיף למועדפים'); toast(on ? '★ נוסף למועדפים' : 'הוצא מהמועדפים'); });
   a('edit2', function () { ui.editing = r.k; ui.note = null; show(null, true); });
   a('ok', function () { put('approved', r.k, { ok: true }); ui.note = { k: r.k, t: 'תודה סבתא! המתכון אושר.' }; show(null, true); });
   a('unok', function () { del('approved', r.k); ui.note = null; show(null, true); });
