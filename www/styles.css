@@ -214,3 +214,21 @@ textarea.inp{min-height:140px;resize:vertical}
 .viewer .onpage span{flex:0 0 auto;font-size:14px;opacity:.85}
 .viewer .onpage button{flex:0 0 auto;min-height:40px;padding:0 14px;border-radius:999px;border:1px solid rgba(251,244,228,.5);background:rgba(251,244,228,.12);color:#FBF4E4;font-size:15px}
 .viewer .onpage button b{color:#E9C27A}
+
+/* grandma approval */
+.chip.approve-chip{border-color:#4E8A35;color:#3F6B2A;background:rgba(120,170,90,.15)}
+.chip.approve-chip[aria-pressed=true]{background:#4E8A35;color:#fff;border-color:#4E8A35}
+.card .chk.ok{color:#3F6B2A;font-weight:700}
+.approve{display:flex;flex-direction:column;gap:8px;align-items:center;text-align:center;padding:14px 12px;border-radius:10px;border:2px solid #7FB05E;background:rgba(160,205,120,.18)}
+.approve b{font-family:var(--script);font-weight:400;font-size:28px;color:#3F6B2A;line-height:1.1}
+.approve span{font-size:15px;line-height:1.45;color:var(--ink)}
+.okbtn{display:inline-flex;align-items:center;gap:8px;min-height:56px;padding:0 22px;border:0;border-radius:999px;background:#4E8A35;color:#fff;font-family:var(--serif);font-weight:900;font-size:18px;box-shadow:0 3px 0 #33601F}
+.okbtn:active{transform:translateY(2px);box-shadow:0 1px 0 #33601F}
+.approved{display:flex;align-items:center;justify-content:center;gap:8px;padding:8px 12px;border-radius:999px;background:rgba(160,205,120,.22);color:#3F6B2A;font-weight:700;font-size:15px}
+.approved button{border:0;background:none;color:var(--muted);font-size:13px;text-decoration:underline;padding:4px}
+.approve-intro{padding:16px;border-radius:8px;margin:6px 0 4px;display:flex;flex-direction:column;gap:6px}
+.approve-intro>*:not(.grain){position:relative;z-index:1}
+.approve-intro b{font-family:var(--script);font-weight:400;font-size:28px;color:#3F6B2A}
+.approve-intro span{font-size:16px;line-height:1.5}
+.dapprove{width:100%;display:flex;align-items:center;justify-content:space-between;min-height:54px;margin:4px 0 6px;padding:0 12px;border:0;border-radius:8px;background:#4E8A35;color:#fff;font-weight:900;font-size:17px}
+.dapprove i{font-style:normal;background:#fff;color:#3F6B2A;border-radius:13px;min-width:30px;height:26px;display:flex;align-items:center;justify-content:center;font-size:13px}

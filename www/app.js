@@ -74,11 +74,11 @@ function compress(file, max, q) {
 }
 
 /* ---------------------------------------------------------------- shared family data (Firestore) */
-var S = { edits: {}, photos: {}, merges: {}, added: {}, pages: {} };
-var COLLS = ['edits', 'photos', 'merges', 'added', 'pages'];
+var S = { edits: {}, photos: {}, merges: {}, added: {}, pages: {}, approved: {} };
+var COLLS = ['edits', 'photos', 'merges', 'added', 'pages', 'approved'];
 var LS = 'savta-cache-v1';
 try { var cached = JSON.parse(localStorage.getItem(LS) || 'null'); if (cached) COLLS.forEach(function (c) { if (c !== 'photos' && c !== 'pages' && cached[c]) S[c] = cached[c]; }); } catch (e) {}
-function persist() { try { localStorage.setItem(LS, JSON.stringify({ edits: S.edits, merges: S.merges, added: S.added })); } catch (e) {} }
+function persist() { try { localStorage.setItem(LS, JSON.stringify({ edits: S.edits, merges: S.merges, added: S.added, approved: S.approved })); } catch (e) {} }
 var db = null, online = 'local';
 function initCloud() {
   if (!window.FB || !CFG.firebase || !CFG.firebase.apiKey) { online = 'local'; return; }
@@ -130,11 +130,13 @@ function all() {
 function eff(r) {
   var e = S.edits[r.k], ph = S.photos[r.k], out = r;
   if (e) {
-    out = Object.assign({}, r, e, { check: false, pages: r.pages.concat(e.extraPages || []) });
+    out = Object.assign({}, r, e, { check: r.check, pages: r.pages.concat(e.extraPages || []) });
     if (e.chId != null && !r.photo && !ph) { out.img = ILL[CH_ICON[e.chId]]; }
   }
   if (ph) out = Object.assign({}, out, { img: ph.data, photo: true, pos: '50% 50%', credit: ph.credit || 'צילום של המשפחה', own: true });
+  out = Object.assign({}, out);
   out.ch = CH[out.chId];
+  out.needs = !!out.check; out.approved = !!S.approved[r.k]; out.check = out.needs && !out.approved;
   return out;
 }
 var visCache = null;
@@ -145,6 +147,7 @@ function vis() {
   list.forEach(function (r, i) { r.n = i + 1; });
   return (visCache = list);
 }
+function pendingCount() { return vis().filter(function (r) { return r.check; }).length; }
 function byKey(k) { var a = all(); for (var i = 0; i < a.length; i++) if (a[i].k === k) return a[i]; return null; }
 function idxOf(k) { var v = vis(); for (var i = 0; i < v.length; i++) if (v[i].k === k) return i; return -1; }
 
@@ -192,12 +195,15 @@ function drawer() {
       + list.map(function (r) { return '<button class="drow" data-k="' + esc(r.k) + '"><b>' + r.n + '</b>' + esc(r.title) + '</button>'; }).join('') + '</details>';
   });
   html += '</div></nav></div>';
+  var pcn = pendingCount();
+  if (pcn) html = html.replace('<div class="dlist">', '<div class="dlist"><button class="dapprove" data-ch="-2">✓ לאישור של סבתא <i>' + pcn + '</i></button>');
   layer.innerHTML = html;
   var bg = $('.drawer-bg', layer);
   bg.onclick = function (e) { if (e.target === bg) closeLayer(); };
   $('[data-a=x]', bg).onclick = closeLayer;
   $$('[data-ch]', bg).forEach(function (b) { b.onclick = function () {
-    closeLayer(); ui.chip = -1; ui.q = ''; ui.jump = +b.dataset.ch; ui.editing = null;
+    closeLayer(); ui.q = ''; ui.editing = null;
+    if (+b.dataset.ch === -2) { ui.chip = -2; ui.jump = null; } else { ui.chip = -1; ui.jump = +b.dataset.ch; }
     nav = [{ name: 'cover' }, { name: 'contents' }]; show('fade');
   }; });
   $$('[data-k]', bg).forEach(function (b) { b.onclick = function () {
@@ -317,22 +323,24 @@ function matches(r, q) {
 function cardsHtml() {
   var V = vis(), q = ui.q.trim(), out = '';
   CH_ORDER.forEach(function (c) {
-    if (ui.chip !== -1 && ui.chip !== c) return;
-    var list = V.filter(function (r) { return r.chId === c && matches(r, q); });
+    if (ui.chip >= 0 && ui.chip !== c) return;
+    var list = V.filter(function (r) { return r.chId === c && matches(r, q) && (ui.chip !== -2 || r.check); });
     if (!list.length) return;
     out += '<div class="sec-h" id="ch' + c + '"><h2>' + esc(CH[c]) + '</h2><i></i><span>' + list.length + '</span></div><div class="grid">';
     list.forEach(function (r) {
       out += '<button class="card paper frame" data-k="' + esc(r.k) + '"><span class="num">' + r.n + '</span>'
         + '<img class="' + (r.photo ? 'ph' : 'il') + '" src="' + esc(r.img) + '" alt="" loading="lazy" style="object-position:' + esc(r.pos) + '">'
-        + '<span class="t">' + esc(r.title) + '</span>' + (r.check ? '<span class="chk">לבדיקה של סבתא</span>' : '') + '</button>';
+        + '<span class="t">' + esc(r.title) + '</span>' + (r.check ? '<span class="chk">לאישור של סבתא</span>' : (r.needs ? '<span class="chk ok">✓ סבתא אישרה</span>' : '')) + '</button>';
     });
     out += '</div>';
   });
+  if (ui.chip === -2) out = '<div class="approve-intro paper frame">' + GRAIN + '<b>לאישור של סבתא</b><span>' + (pendingCount() ? 'במתכונים האלה לא הייתי בטוח איך לקרוא את כתב היד. נכנסים לכל מתכון, משווים לדף מהמחברת, ולוחצים על ה־✓ הירוק. אם משהו לא נכון, לוחצים ״לתקן״.' : 'סבתא אישרה את כל המתכונים. תודה!') + '</span></div>' + out;
   if (!out) out = '<p style="text-align:center;font-size:17px;color:var(--muted);margin:30px 0">לא נמצא מתכון. אפשר לנסות מילה אחרת.</p>';
   return out;
 }
 SCREENS.contents = function () {
-  var chips = '<button class="chip" data-c="-1" aria-pressed="' + (ui.chip === -1) + '">הכול</button>' + CH_ORDER.map(function (c) { return '<button class="chip" data-c="' + c + '" aria-pressed="' + (ui.chip === c) + '">' + esc(CH[c]) + '</button>'; }).join('');
+  var pc = pendingCount();
+  var chips = '<button class="chip" data-c="-1" aria-pressed="' + (ui.chip === -1) + '">הכול</button>' + (pc || ui.chip === -2 ? '<button class="chip approve-chip" data-c="-2" aria-pressed="' + (ui.chip === -2) + '">✓ לאישור של סבתא (' + pc + ')</button>' : '') + CH_ORDER.map(function (c) { return '<button class="chip" data-c="' + c + '" aria-pressed="' + (ui.chip === c) + '">' + esc(CH[c]) + '</button>'; }).join('');
   return '<div class="top">' + '<button class="round paper" data-a="menu" aria-label="תפריט פרקים">' + ic('menu', 24, '#5B3A1E', 2) + '</button>' + '<button data-a="cover" aria-label="לכריכה" style="border:0;background:none;padding:0;border-radius:50%">' + logo(46) + '</button>'
     + '<div style="flex:1;display:flex;flex-direction:column;line-height:1.05"><span class="kicker">סבתא אהובה</span><h1>כל המתכונים</h1><span class="sync">' + syncLabel() + '</span></div>'
     + '<div class="count paper"><b>' + vis().length + '</b><span>מתכונים</span></div></div>'
@@ -384,10 +392,13 @@ SCREENS.recipe = function (v) {
     + '<button class="swap" data-a="photo">' + ic('cam', 16, '#5B3A1E', 2) + (r.own ? 'להחליף שוב' : 'להחליף תמונה') + '</button>'
     + (r.credit ? '<span class="credit">' + esc(r.credit) + '</span>' : '') + '</div>'
     + '<h1 class="rtitle">' + esc(r.title) + '</h1>' + ornament()
-    + '<div class="tags">' + r.tags.map(function (t) { return '<span class="tag">' + esc(t) + '</span>'; }).join('') + (r.check ? '<span class="tag warn">נקרא מכתב יד · לבדיקה</span>' : '') + '</div>'
+    + '<div class="tags">' + r.tags.map(function (t) { return '<span class="tag">' + esc(t) + '</span>'; }).join('') + '</div>'
     + (ui.note && ui.note.k === r.k ? '<div class="note">' + esc(ui.note.t) + '</div>' : '');
   if (editing) h += editForm(r);
   else {
+    if (r.check) h += '<div class="approve"><b>סבתא, האם המתכון נכון?</b><span>במתכון הזה לא הייתי בטוח איך לקרוא את כתב היד. כדאי להשוות לדף מהמחברת שלמטה.</span>'
+      + '<div class="actions"><button class="okbtn" data-a="ok">' + ic('check', 28, '#FFFFFF', 3) + 'נכון, אני מאשרת</button><button class="btn" data-a="edit2">' + ic('pen', 16, '#5B3A1E', 2) + 'לתקן</button></div></div>';
+    else if (r.needs) h += '<div class="approved">' + ic('check', 20, '#3F6B2A', 3) + 'סבתא אישרה את המתכון<button data-a="unok">ביטול</button></div>';
     h += '<div class="actions"><button class="btn" data-a="edit">' + ic('pen', 16, '#5B3A1E', 2) + 'לערוך ולתקן</button><button class="btn" data-a="merge">' + 'לשלב במתכון אחר</button></div>';
     if (sug) h += '<div class="suggest"><span>נראה שזה שייך ל־<b>״' + esc(sug.title) + '״</b> (מתכון ' + sug.n + ')</span><button class="btn solid" data-a="sug">' + 'לשלב שם</button></div>';
     h += '<section>' + heading('מצרכים') + groupsHtml(r.groups) + '</section>'
@@ -445,6 +456,9 @@ BIND.recipe = function (el, v) {
     ui.editing = null; ui.note = { k: r.k, t: 'נשמר. תודה סבתא!' }; show(null, true);
   });
   a('merge', function () { mergeSheet(r); });
+  a('edit2', function () { ui.editing = r.k; ui.note = null; show(null, true); });
+  a('ok', function () { put('approved', r.k, { ok: true }); ui.note = { k: r.k, t: 'תודה סבתא! המתכון אושר.' }; show(null, true); });
+  a('unok', function () { del('approved', r.k); ui.note = null; show(null, true); });
   a('sug', function () { doMerge(r.k, r.suggest); });
   a('photo', function () { photoSheet(r); });
   a('delete', function () { if (confirm('למחוק את ״' + r.title + '״?')) { del('added', r.k); ui.note = null; replace({ name: 'contents' }, 'back'); toast('המתכון נמחק'); } });
