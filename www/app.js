@@ -403,33 +403,35 @@ SCREENS.recipe = function (v) {
     + '<button class="round paper" data-a="menu" aria-label="תפריט פרקים">' + ic('menu', 24, '#5B3A1E', 2) + '</button>'
     + '<div style="display:flex;flex-direction:column;align-items:center;line-height:1.1"><span class="kicker">' + esc(r.ch) + '</span><span style="font-size:15px;color:var(--brown)">מתכון ' + r.n + ' מתוך ' + V.length + '</span></div>'
     + '<button data-a="home" aria-label="לכל המתכונים" style="border:0;background:none;padding:0;border-radius:50%">' + logo(46) + '</button></div>'
-    + '<div class="rcard paper frame">' + GRAIN + '<div class="scroll"><div class="zm">'
+    + '<div class="rcard paper frame">' + GRAIN + '<div class="scroll"><div class="zm rgrid"><div class="r-head">'
     + '<div class="hero"><img class="' + (r.photo ? 'ph' : 'il') + '" src="' + esc(r.img) + '" alt="' + esc(r.title) + '" style="object-position:' + esc(r.pos) + '">'
     + '<button class="swap" data-a="photo">' + ic('cam', 16, '#5B3A1E', 2) + (r.own ? 'להחליף שוב' : 'להחליף תמונה') + '</button>'
     + (r.credit ? '<span class="credit">' + esc(r.credit) + '</span>' : '') + '</div>'
     + '<div class="title-row"><h1 class="rtitle">' + esc(r.title) + '</h1><button class="favbtn' + (isFav(r.k) ? ' on' : '') + '" data-a="fav" aria-pressed="' + isFav(r.k) + '" aria-label="' + (isFav(r.k) ? 'להוציא מהמועדפים' : 'להוסיף למועדפים') + '">' + STAR + '</button></div>' + ornament()
     + '<div class="tags">' + r.tags.map(function (t) { return '<span class="tag">' + esc(t) + '</span>'; }).join('') + '</div>'
     + (ui.note && ui.note.k === r.k ? '<div class="note">' + esc(ui.note.t) + '</div>' : '');
-  if (editing) h += editForm(r);
+  if (editing) h += editForm(r) + '</div>';
   else {
     if (r.check) h += '<div class="approve"><b>סבתא, האם המתכון נכון?</b><span>במתכון הזה לא הייתי בטוח איך לקרוא את כתב היד. כדאי להשוות לדף מהמחברת שלמטה.</span>'
       + '<div class="actions"><button class="okbtn" data-a="ok">' + ic('check', 28, '#FFFFFF', 3) + 'נכון, אני מאשרת</button><button class="btn" data-a="edit2">' + ic('pen', 16, '#5B3A1E', 2) + 'לתקן</button></div></div>';
     else if (r.needs) h += '<div class="approved">' + ic('check', 20, '#3F6B2A', 3) + 'סבתא אישרה את המתכון<button data-a="unok">ביטול</button></div>';
     h += '<div class="actions"><button class="btn" data-a="edit">' + ic('pen', 16, '#5B3A1E', 2) + 'לערוך ולתקן</button><button class="btn" data-a="merge">' + 'לשלב במתכון אחר</button></div>';
     if (sug) h += '<div class="suggest"><span>נראה שזה שייך ל־<b>״' + esc(sug.title) + '״</b> (מתכון ' + sug.n + ')</span><button class="btn solid" data-a="sug">' + 'לשלב שם</button></div>';
-    h += '<section>' + heading('מצרכים') + groupsHtml(r.groups) + '</section>'
-      + '<section>' + heading('אופן ההכנה') + stepsHtml(r.steps) + '</section>'
+    h += '</div><div class="r-ing"><section>' + heading('מצרכים') + groupsHtml(r.groups) + '</section></div>'
+      + '<div class="r-steps"><section>' + heading('אופן ההכנה') + stepsHtml(r.steps) + '</section>'
       + (r.tip ? '<p class="tip"><b>טיפ של סבתא · </b>' + esc(r.tip) + '</p>' : '');
     children.forEach(function (c) {
       h += '<div class="child"><h3>' + esc(c.title) + '</h3>' + groupsHtml(c.groups) + stepsHtml(c.steps) + (c.tip ? '<p class="tip">' + esc(c.tip) + '</p>' : '')
         + '<button class="btn" data-unmerge="' + esc(c.k) + '" style="margin-top:8px">להפריד לכרטיס נפרד</button></div>';
     });
+    h += '</div>';
   }
+  h += '<div class="r-foot">';
   var pages = r.pages.map(pageSrc).filter(Boolean);
   if (pages.length) h += '<section>' + heading('מהמחברת') + '<p style="margin:0 0 2px;text-align:center;font-size:13px;color:var(--muted)">לוחצים על הדף כדי לראות אותו בגדול</p><div class="thumbs hs">'
     + pages.map(function (p, j) { return '<button data-page="' + j + '" aria-label="לפתוח את הדף המקורי בגדול" style="transform:rotate(' + (j % 2 ? 4 : -4) + 'deg)"><img src="' + esc(p) + '" alt="דף מהמחברת" loading="lazy"></button>'; }).join('') + '</div></section>';
   if (r.added && !editing) h += '<div style="text-align:center;margin-top:8px"><button class="btn" data-a="delete">' + ic('trash', 16, '#9A4F24', 2) + 'למחוק את המתכון</button></div>';
-  h += '</div></div></div>'
+  h += '</div></div></div></div>'
     + '<div class="navbar"><button class="round paper" data-a="prev" aria-label="לכרטיס הקודם"' + (i === 0 ? ' disabled style="opacity:.4"' : '') + '>' + ic('back', 22, '#5B3A1E', 2) + '</button>'
     + zoomCtl()
     + '<button class="round solid" data-a="next" aria-label="לכרטיס הבא"' + (i === V.length - 1 ? ' disabled style="opacity:.4"' : '') + '>' + ic('next', 22, '#FBF4E4', 2.2) + '</button></div>';
