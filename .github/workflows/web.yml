@@ -27,6 +27,11 @@ jobs:
           cat > www/config.js <<'CFG'
           window.CONFIG = { firebase: { apiKey: "AIzaSyCkkGThGYjXC5ng3M3QetDJgFI-DzGbiLo", authDomain: "savta-recipes.firebaseapp.com", projectId: "savta-recipes", storageBucket: "savta-recipes.firebasestorage.app", messagingSenderId: "80825324616", appId: "1:80825324616:web:fa16cf150084e6ecfdf47d" }, geminiKey: "", web: true };
           CFG
+      - name: Cache-busting (so updates show up right away)
+        run: |
+          V=${{ github.run_number }}
+          sed -i -E "s#(href|src)=\"(styles\.css|config\.js|data\.js|ingredients\.js|app\.js|vendor/[a-z.]+\.js)\"#\1=\"\2?v=$V\"#g" www/index.html
+          grep -n "?v=" www/index.html
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
