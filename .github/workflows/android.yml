@@ -1,0 +1,93 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apk
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Install
+        run: npm ci
+
+      - name: Write app config (Firebase + Gemini key from secret)
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          node -e '
+          const fs = require("fs");
+          const cfg = {
+            firebase: {
+              apiKey: "AIzaSyCkkGThGYjXC5ng3M3QetDJgFI-DzGbiLo",
+              authDomain: "savta-recipes.firebaseapp.com",
+              projectId: "savta-recipes",
+              storageBucket: "savta-recipes.firebasestorage.app",
+              messagingSenderId: "80825324616",
+              appId: "1:80825324616:web:fa16cf150084e6ecfdf47d"
+            },
+            geminiKey: process.env.GEMINI_API_KEY || ""
+          };
+          fs.writeFileSync("www/config.js", "window.CONFIG = " + JSON.stringify(cfg) + ";\n");
+          console.log("gemini key present:", !!cfg.geminiKey);
+          '
+
+      - name: Create Android project
+        run: |
+          npx cap add android
+          npx @capacitor/assets generate --android \
+            --iconBackgroundColor '#FBF4E4' --splashBackgroundColor '#E9E1D2'
+          npx cap sync android
+
+      - name: Permissions and version
+        run: |
+          M=android/app/src/main/AndroidManifest.xml
+          sed -i 's#<uses-permission android:name="android.permission.INTERNET" />#<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.CAMERA" />\n    <uses-feature android:name="android.hardware.camera" android:required="false" />#' $M
+          grep -n permission $M
+          G=android/app/build.gradle
+          sed -i "s/versionCode [0-9]*/versionCode ${{ github.run_number }}/; s/versionName \"[^\"]*\"/versionName \"1.${{ github.run_number }}\"/" $G
+          grep -n "version" $G
+
+      - name: Build release APK
+        working-directory: android
+        run: ./gradlew assembleRelease --no-daemon -q
+
+      - name: Sign APK
+        run: |
+          BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)
+          IN=android/app/build/outputs/apk/release/app-release-unsigned.apk
+          $BT/zipalign -f -p 4 $IN aligned.apk
+          $BT/apksigner sign --ks signing/savta.jks --ks-pass pass:savta-ahuva --key-pass pass:savta-ahuva \
+            --ks-key-alias savta --out savta-recipes.apk aligned.apk
+          $BT/apksigner verify savta-recipes.apk
+          ls -la savta-recipes.apk
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.${{ github.run_number }}
+          name: ספר המתכונים של סבתא אהובה · גרסה 1.${{ github.run_number }}
+          body: |
+            להורדה בטלפון: לוחצים על savta-recipes.apk למטה, ואז "התקנה".
+          files: savta-recipes.apk
+          make_latest: true
