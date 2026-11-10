@@ -233,6 +233,23 @@ function back() {
 function dataChanged() { visCache = null; if (formOpen) { pendingRender = true; return; } show(null, true); }
 
 var curEl = null;
+/* "stirring pot" transition: the page swirls like water stirred in a pot, then drains away */
+function stir(node, done) {
+  var disp = document.getElementById('stirDisp'), turb = document.getElementById('stirTurb');
+  var dur = 1250, t0 = null, ok = !!(disp && turb);
+  if (ok) node.style.filter = 'url(#stir)';
+  node.classList.add('stirring');
+  function f(ts) {
+    if (t0 === null) t0 = ts;
+    var t = Math.min(1, (ts - t0) / dur);
+    if (ok) {
+      disp.setAttribute('scale', String(Math.round(70 * Math.sin(Math.PI * Math.min(1, t * 1.15)))));
+      turb.setAttribute('baseFrequency', (0.012 + 0.01 * t).toFixed(4) + ' ' + (0.02 + 0.02 * Math.sin(t * 6)).toFixed(4));
+    }
+    if (t < 1) requestAnimationFrame(f); else { node.style.filter = ''; done(); }
+  }
+  requestAnimationFrame(f);
+}
 function show(anim, keepScroll) {
   visCache = null;
   var v = cur(), old = curEl && curEl.parentNode === stage ? curEl : null;
@@ -247,7 +264,11 @@ function show(anim, keepScroll) {
   // finish any running transition: keep only the newest screen
   Array.prototype.slice.call(stage.children).forEach(function (c) { if (c !== old) c.remove(); });
   if (old) { old.className = old.className.replace(/\s*(turn-out|turn-in)/g, ''); old.style.zIndex = ''; }
-  if (old && (anim === 'next' || anim === 'back')) {
+  if (old && anim === 'stir') {
+    stage.innerHTML = ''; stage.appendChild(el); stage.appendChild(old);
+    el.style.zIndex = 1; old.style.zIndex = 2;
+    stir(old, function () { if (old.parentNode === stage) old.remove(); el.style.zIndex = ''; });
+  } else if (old && (anim === 'next' || anim === 'back')) {
     var mover = anim === 'next' ? old : el, still = anim === 'next' ? el : old;
     stage.innerHTML = ''; stage.appendChild(still); stage.appendChild(mover);
     still.style.zIndex = 1; mover.style.zIndex = 2;
@@ -272,22 +293,18 @@ function show(anim, keepScroll) {
 /* ---------------------------------------------------------------- screens */
 var SCREENS = {}, BIND = {};
 
-function miniCard(title, icon, x, y, rot, w) {
-  return '<div class="mini paper" aria-hidden="true" style="left:' + x + ';bottom:' + y + 'px;transform:rotate(' + rot + 'deg);' + (w ? 'width:' + w + 'px' : '') + '"><img src="' + ILL[icon] + '" alt=""><span>' + esc(title) + '</span><i style="width:90%"></i><i style="width:70%"></i><i style="width:80%"></i></div>';
-}
 SCREENS.cover = function () {
   var n = vis().length;
-  return '<div class="cork" aria-hidden="true"><svg width="580" height="580" style="position:absolute;inset:0"><rect width="580" height="580" filter="url(#cork)"/></svg></div>'
-    + miniCard('סופריטו', 'meat', '4%', 40, -10) + miniCard('חצילים מטוגנים', 'vegan', 'calc(96% - 118px)', 46, 9) + miniCard('מרק קובה', 'soup', 'calc(50% - 56px)', 14, 2, 112)
-    + '<div class="cover-inner"><img class="cover-logo" src="' + LOGO + '" alt="המתכונים של סבתא, ציור של סבתא אהובה">'
+  return '<div class="cover-inner"><img class="cover-logo" src="' + LOGO + '" alt="המתכונים של סבתא, ציור של סבתא אהובה">'
     + '<div class="welcome paper frame">' + GRAIN
     + ornament(150)
-    + '<p class="lead">כל המתכונים של סבתא אהובה, באוסף אחד ומיוחד:<br>' + n + ' מתכונים של כל הדברים הכי טעימים בעולם, בדיוק כמו שרק סבתא יודעת להכין!</p>'
+    + '<p class="lead"><span>כל המתכונים של סבתא אהובה</span><span>באוסף אחד ומיוחד:</span><span>' + n + ' מתכונים של המאכלים הכי טעימים</span><span>בדיוק כמו שרק סבתא יודעת להכין!</span></p>'
     + ornament(150)
-    + '<button class="btn solid big" data-a="open">כניסה' + ic('next', 18, '#FBF4E4', 2.2) + '</button>'
-    + '</div></div>';
+    + '</div>'
+    + '<button class="enter" data-a="open"><span class="enter-in">כניסה' + ic('next', 30, '#FBF4E4', 2.4) + '</span></button>'
+    + '</div>';
 };
-BIND.cover = function (el) { $('[data-a=open]', el).onclick = function () { go({ name: 'contents' }, 'next'); }; };
+BIND.cover = function (el) { $('[data-a=open]', el).onclick = function () { go({ name: 'contents' }, 'stir'); }; };
 
 function matches(r, q) {
   if (!q) return true;

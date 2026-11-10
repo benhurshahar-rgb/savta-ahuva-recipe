@@ -12,6 +12,7 @@
 <svg width="0" height="0" aria-hidden="true" style="position:absolute"><defs>
 <filter id="grain"><feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="2" seed="5"/><feColorMatrix values="0 0 0 0 0.42  0 0 0 0 0.30  0 0 0 0 0.16  0 0 0 0.10 0"/></filter>
 <filter id="cork"><feTurbulence type="fractalNoise" baseFrequency="0.55" numOctaves="3" seed="9"/><feColorMatrix values="0 0 0 0 0.35  0 0 0 0 0.22  0 0 0 0 0.10  0 0 0 0.55 -0.12"/></filter>
+<filter id="stir" x="-10%" y="-10%" width="120%" height="120%"><feTurbulence id="stirTurb" type="turbulence" baseFrequency="0.012 0.02" numOctaves="2" seed="7" result="n"/><feDisplacementMap id="stirDisp" in="SourceGraphic" in2="n" scale="0" xChannelSelector="R" yChannelSelector="G"/></filter>
 </defs></svg>
 <div id="stage"></div>
 <div id="layer"></div>
