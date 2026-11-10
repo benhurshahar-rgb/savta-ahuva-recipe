@@ -52,7 +52,7 @@ a{color:var(--rust)}
 .cover{overflow:hidden}
 .cover-inner{position:relative;flex:1;display:flex;flex-direction:column;align-items:center;overflow-y:auto;padding:22px 20px 28px}
 .cover-logo{width:min(290px,70vw);height:min(290px,70vw);border-radius:50%;object-fit:cover;box-shadow:0 0 0 6px #FBF4E4,0 0 0 7.5px rgba(120,85,45,.45),0 14px 30px rgba(60,40,20,.3)}
-.welcome{margin-top:24px;padding-left:12px!important;padding-right:12px!important;border-radius:8px;padding:22px;display:flex;flex-direction:column;align-items:center;gap:10px;width:100%;max-width:420px}
+.welcome{margin-top:24px;margin-bottom:28px;padding-left:12px!important;padding-right:12px!important;border-radius:8px;padding:22px;display:flex;flex-direction:column;align-items:center;gap:10px;width:100%;max-width:420px}
 .welcome>*:not(.grain){position:relative;z-index:1}
 .welcome h1{margin:0;font-family:var(--script);font-weight:400;font-size:40px;line-height:1;color:var(--brown)}
 .welcome p{margin:0;font-size:16px;line-height:1.55;text-align:center}
@@ -200,7 +200,7 @@ textarea.inp{min-height:140px;resize:vertical}
 .zoomctl .zreset.on{background:var(--brown);color:#FBF4E4;font-size:14px}
 
 /* big entry button */
-.enter{margin:auto 0 0;padding:7px;border:0;border-radius:999px;background:linear-gradient(#D9B26E,#B8893F);box-shadow:0 10px 26px rgba(60,40,20,.35),inset 0 1px 0 rgba(255,255,255,.4);width:min(320px,86vw);margin-top:28px;animation:breathe 2.6s ease-in-out infinite}
+.enter{margin:auto 0 4px;padding:7px;border:0;border-radius:999px;background:linear-gradient(#D9B26E,#B8893F);box-shadow:0 10px 26px rgba(60,40,20,.35),inset 0 1px 0 rgba(255,255,255,.4);width:min(320px,86vw);animation:breathe 2.6s ease-in-out infinite}
 .enter-in{display:flex;align-items:center;justify-content:center;gap:12px;height:76px;border-radius:999px;background:radial-gradient(ellipse at 50% 30%,#7A5130,#5B3A1E 60%,#4A2E16);border:1.5px solid rgba(251,244,228,.55);box-shadow:inset 0 -4px 0 rgba(0,0,0,.25);font-family:var(--script);font-size:44px;color:#FBF4E4;line-height:1}
 .enter:active{transform:scale(.97)}
 @keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.03)}}
