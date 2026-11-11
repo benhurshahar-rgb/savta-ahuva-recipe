@@ -4,7 +4,7 @@
 var CFG = window.CONFIG || {};
 var BASE = window.RECIPES, CH = window.CHAPTERS, CH_ORDER = window.CH_ORDER, CH_ICON = window.CH_ICON, ILL = window.ILL, LOGO = window.LOGO;
 var TAGS = ['פרווה', 'בשרי', 'חלבי', 'טבעוני'];
-var PENDING = ['פשטידת פטריות', 'שוקיים ברוטב', 'קציצות גזר (?)'];
+var PENDING = ['שוקיים ברוטב', 'קציצות גזר (?)'];
 
 /* ---------------------------------------------------------------- helpers */
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
@@ -326,7 +326,10 @@ BIND.cover = function (el) { $('[data-a=open]', el).onclick = function () { go({
 function matches(r, q) {
   if (!q) return true;
   q = norm(q);
-  if (norm(r.title).indexOf(q) !== -1) return true;
+  var t = norm(r.title);
+  if (t.indexOf(q) !== -1 || t.replace(/ /g, '').indexOf(q.replace(/ /g, '')) !== -1) return true;
+  var tw = t.split(' ');
+  if (q.split(' ').every(function (w) { return tw.some(function (x) { return x.indexOf(w) === 0 || (w.length > 2 && w.indexOf(x) === 0 && x.length > 2); }); })) return true;
   return r.groups.some(function (g) { return g.items.some(function (i) { return norm(i).indexOf(q) !== -1; }); });
 }
 function cardHtml(r) {
