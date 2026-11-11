@@ -133,7 +133,9 @@ function eff(r) {
     out = Object.assign({}, r, e, { check: r.check, pages: r.pages.concat(e.extraPages || []) });
     if (e.chId != null && !r.photo && !ph) { out.img = ILL[CH_ICON[e.chId]]; }
   }
+  var base = r.photo ? [{ img: r.img, credit: r.credit, pos: r.pos }] : [];
   if (ph) out = Object.assign({}, out, { img: ph.data, photo: true, pos: '50% 50%', credit: ph.credit || 'צילום של המשפחה', own: true });
+  out.photos = (ph ? [{ img: ph.data, credit: ph.credit || 'צילום של המשפחה', pos: '50% 50%' }] : []).concat(base).concat(r.gallery || []);
   out = Object.assign({}, out);
   out.ch = CH[out.chId];
   out.needs = !!out.check; out.approved = !!S.approved[r.k]; out.check = out.needs && !out.approved;
@@ -392,6 +394,16 @@ function groupsHtml(groups) {
 }
 function stepsHtml(steps) { return '<ol class="steps">' + steps.map(function (s, i) { return '<li><b>' + (i + 1) + '.</b><span>' + esc(s) + '</span></li>'; }).join('') + '</ol>'; }
 
+var GI = {};
+function heroHtml(r) {
+  var ps = r.photos && r.photos.length ? r.photos : [{ img: r.img, credit: r.credit, pos: r.pos, il: !r.photo }];
+  var gi = Math.min(GI[r.k] || 0, ps.length - 1), p = ps[gi];
+  return '<div class="hero"><img class="' + (p.il ? 'il' : 'ph') + '" src="' + esc(p.img) + '" alt="' + esc(r.title) + '" style="object-position:' + esc(p.pos || '50% 50%') + '">'
+    + (ps.length > 1 ? '<button class="garr gnext" data-g="1" aria-label="לתמונה הבאה">' + ic('next', 24, '#5B3A1E', 2.4) + '</button><button class="garr gprev" data-g="-1" aria-label="לתמונה הקודמת">' + ic('back', 24, '#5B3A1E', 2.4) + '</button>'
+      + '<span class="gcount" dir="ltr">' + (gi + 1) + ' / ' + ps.length + '</span>' : '')
+    + (gi === 0 ? '<button class="swap" data-a="photo">' + ic('cam', 16, '#5B3A1E', 2) + (r.own ? 'להחליף שוב' : 'להחליף תמונה') + '</button>' : '')
+    + (p.credit ? '<span class="credit">' + esc(p.credit) + '</span>' : '') + '</div>';
+}
 SCREENS.recipe = function (v) {
   var V = vis(), i = idxOf(v.k);
   if (i < 0) { var t = S.merges[v.k]; v.k = t && idxOf(t) >= 0 ? t : (V[0] && V[0].k); i = idxOf(v.k); }
@@ -404,9 +416,7 @@ SCREENS.recipe = function (v) {
     + '<div style="display:flex;flex-direction:column;align-items:center;line-height:1.1"><span class="kicker">' + esc(r.ch) + '</span><span style="font-size:15px;color:var(--brown)">מתכון ' + r.n + ' מתוך ' + V.length + '</span></div>'
     + '<button data-a="home" aria-label="לכל המתכונים" style="border:0;background:none;padding:0;border-radius:50%">' + logo(46) + '</button></div>'
     + '<div class="rcard paper frame">' + GRAIN + '<div class="scroll"><div class="zm rgrid"><div class="r-head">'
-    + '<div class="hero"><img class="' + (r.photo ? 'ph' : 'il') + '" src="' + esc(r.img) + '" alt="' + esc(r.title) + '" style="object-position:' + esc(r.pos) + '">'
-    + '<button class="swap" data-a="photo">' + ic('cam', 16, '#5B3A1E', 2) + (r.own ? 'להחליף שוב' : 'להחליף תמונה') + '</button>'
-    + (r.credit ? '<span class="credit">' + esc(r.credit) + '</span>' : '') + '</div>'
+    + heroHtml(r)
     + '<div class="title-row"><h1 class="rtitle">' + esc(r.title) + '</h1><button class="favbtn' + (isFav(r.k) ? ' on' : '') + '" data-a="fav" aria-pressed="' + isFav(r.k) + '" aria-label="' + (isFav(r.k) ? 'להוציא מהמועדפים' : 'להוסיף למועדפים') + '">' + STAR + '</button></div>' + ornament()
     + '<div class="tags">' + r.tags.map(function (t) { return '<span class="tag">' + esc(t) + '</span>'; }).join('') + '</div>'
     + (ui.note && ui.note.k === r.k ? '<div class="note">' + esc(ui.note.t) + '</div>' : '');
@@ -474,6 +484,14 @@ BIND.recipe = function (el, v) {
     ui.editing = null; ui.note = { k: r.k, t: 'נשמר. תודה סבתא!' }; show(null, true);
   });
   a('merge', function () { mergeSheet(r); });
+  function bindGallery() {
+    $$('[data-g]', el).forEach(function (b) { b.onclick = function (e) {
+      e.stopPropagation(); var n = r.photos.length; GI[r.k] = ((GI[r.k] || 0) + (+b.dataset.g) + n) % n;
+      var h = $('.hero', el), t = document.createElement('div'); t.innerHTML = heroHtml(r); h.replaceWith(t.firstChild);
+      bindGallery(); var sw = $('[data-a=photo]', el); if (sw) sw.onclick = function () { photoSheet(r); };
+    }; });
+  }
+  bindGallery();
   a('fav', function () { toggleFav(r.k); var b = $('[data-a=fav]', el), on = isFav(r.k); b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); b.setAttribute('aria-label', on ? 'להוציא מהמועדפים' : 'להוסיף למועדפים'); toast(on ? '★ נוסף למועדפים' : 'הוצא מהמועדפים'); });
   a('edit2', function () { ui.editing = r.k; ui.note = null; show(null, true); });
   a('ok', function () { put('approved', r.k, { ok: true }); ui.note = { k: r.k, t: 'תודה סבתא! המתכון אושר.' }; show(null, true); });
