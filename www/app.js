@@ -74,11 +74,11 @@ function compress(file, max, q) {
 }
 
 /* ---------------------------------------------------------------- shared family data (Firestore) */
-var S = { edits: {}, photos: {}, merges: {}, added: {}, pages: {}, approved: {} };
-var COLLS = ['edits', 'photos', 'merges', 'added', 'pages', 'approved'];
+var S = { edits: {}, photos: {}, merges: {}, added: {}, pages: {}, approved: {}, removed: {}, hidden: {} };
+var COLLS = ['edits', 'photos', 'merges', 'added', 'pages', 'approved', 'removed', 'hidden'];
 var LS = 'savta-cache-v1';
 try { var cached = JSON.parse(localStorage.getItem(LS) || 'null'); if (cached) COLLS.forEach(function (c) { if (c !== 'photos' && c !== 'pages' && cached[c]) S[c] = cached[c]; }); } catch (e) {}
-function persist() { try { localStorage.setItem(LS, JSON.stringify({ edits: S.edits, merges: S.merges, added: S.added, approved: S.approved })); } catch (e) {} }
+function persist() { try { localStorage.setItem(LS, JSON.stringify({ edits: S.edits, merges: S.merges, added: S.added, approved: S.approved, removed: S.removed, hidden: S.hidden })); } catch (e) {} }
 var db = null, online = 'local';
 function initCloud() {
   if (!window.FB || !CFG.firebase || !CFG.firebase.apiKey) { online = 'local'; return; }
@@ -135,8 +135,13 @@ function eff(r) {
   }
   var base = r.photo ? [{ img: r.img, credit: r.credit, pos: r.pos }] : [];
   if (ph) out = Object.assign({}, out, { img: ph.data, photo: true, pos: '50% 50%', credit: ph.credit || 'צילום של המשפחה', own: true });
-  out.photos = (ph ? [{ img: ph.data, credit: ph.credit || 'צילום של המשפחה', pos: '50% 50%' }] : []).concat(base).concat(r.gallery || []);
+  var hid = (S.hidden[r.k] && S.hidden[r.k].imgs) || [];
+  out.photos = (ph ? [{ img: ph.data, credit: ph.credit || 'צילום של המשפחה', pos: '50% 50%', fam: true }] : []).concat(base).concat(r.gallery || [])
+    .filter(function (p) { return p.fam || hid.indexOf(p.img) === -1; });
   out = Object.assign({}, out);
+  out.hiddenCount = hid.length;
+  if (out.photos.length) { var f0 = out.photos[0]; out.img = f0.img; out.credit = f0.credit; out.pos = f0.pos || '50% 50%'; out.photo = true; }
+  else { out.img = ILL[CH_ICON[out.chId]] || ILL.parve; out.credit = ''; out.photo = false; }
   out.ch = CH[out.chId];
   out.needs = !!out.check; out.approved = !!S.approved[r.k]; out.check = out.needs && !out.approved;
   return out;
@@ -144,7 +149,7 @@ function eff(r) {
 var visCache = null;
 function vis() {
   if (visCache) return visCache;
-  var list = all().filter(function (r) { return !S.merges[r.k]; });
+  var list = all().filter(function (r) { return !S.merges[r.k] && !S.removed[r.k]; });
   list.sort(function (a, b) { return (CH_ORDER.indexOf(a.chId) - CH_ORDER.indexOf(b.chId)) || (a.num - b.num) || ((a.created || 0) - (b.created || 0)); });
   list.forEach(function (r, i) { r.n = i + 1; });
   return (visCache = list);
@@ -202,6 +207,9 @@ function drawer() {
       + '<button class="dch" data-ch="' + c + '">לכל הפרק ←</button>'
       + list.map(function (r) { return '<button class="drow" data-k="' + esc(r.k) + '"><b>' + r.n + '</b>' + esc(r.title) + '</button>'; }).join('') + '</details>';
   });
+  var gone = all().filter(function (r) { return S.removed[r.k]; });
+  if (gone.length) html += '<details class="dgone"><summary><span>מתכונים שנמחקו</span><i>' + gone.length + '</i></summary>'
+    + gone.map(function (r) { return '<button class="drow" data-restore="' + esc(r.k) + '">' + ic('back', 16, '#9A4F24', 2) + esc(r.title) + ' <small>להחזיר</small></button>'; }).join('') + '</details>';
   html += '</div></nav></div>';
   var pcn = pendingCount(), fvn = favList().length;
   html = html.replace('<div class="dlist">', '<div class="dlist"><button class="dfav" data-ch="-3">★ המועדפים שלי <i>' + fvn + '</i></button>');
@@ -214,6 +222,12 @@ function drawer() {
     closeLayer(); ui.q = ''; ui.editing = null;
     if (+b.dataset.ch < 0) { ui.chip = +b.dataset.ch; ui.jump = null; } else { ui.chip = -1; ui.jump = +b.dataset.ch; }
     nav = [{ name: 'cover' }, { name: 'contents' }]; show('fade');
+  }; });
+  $$('[data-restore]', bg).forEach(function (b) { b.onclick = function () {
+    var k = b.dataset.restore, t = byKey(k).title;
+    withPassword('להחזיר את ״' + t + '״?', 'המתכון יחזור לספר אצל כל המשפחה.', 'להחזיר', function () {
+      del('removed', k); ui.note = { k: k, t: 'המתכון חזר לספר.' }; nav = [{ name: 'cover' }, { name: 'contents' }, { name: 'recipe', k: k }]; show('fade');
+    });
   }; });
   $$('[data-k]', bg).forEach(function (b) { b.onclick = function () {
     closeLayer(); ui.editing = null; ui.note = null;
@@ -404,6 +418,7 @@ function heroHtml(r) {
   return '<div class="hero"><img class="' + (p.il ? 'il' : 'ph') + '" src="' + esc(p.img) + '" alt="' + esc(r.title) + '" style="object-position:' + esc(p.pos || '50% 50%') + '">'
     + (ps.length > 1 ? '<button class="garr gnext" data-g="1" aria-label="לתמונה הבאה">' + ic('next', 24, '#5B3A1E', 2.4) + '</button><button class="garr gprev" data-g="-1" aria-label="לתמונה הקודמת">' + ic('back', 24, '#5B3A1E', 2.4) + '</button>'
       + '<span class="gcount" dir="ltr">' + (gi + 1) + ' / ' + ps.length + '</span>' : '')
+    + (r.photos && r.photos.length ? '<button class="pdel" data-a="pdel" aria-label="למחוק את התמונה">' + ic('trash', 18, '#9A4F24', 2) + '</button>' : '')
     + (gi === 0 ? '<button class="swap" data-a="photo">' + ic('cam', 16, '#5B3A1E', 2) + (r.own ? 'להחליף שוב' : 'להחליף תמונה') + '</button>' : '')
     + (p.credit ? '<span class="credit">' + esc(p.credit) + '</span>' : '') + '</div>';
 }
@@ -443,7 +458,8 @@ SCREENS.recipe = function (v) {
   var pages = r.pages.map(pageSrc).filter(Boolean);
   if (pages.length) h += '<section>' + heading('מהמחברת') + '<p style="margin:0 0 2px;text-align:center;font-size:13px;color:var(--muted)">לוחצים על הדף כדי לראות אותו בגדול</p><div class="thumbs hs">'
     + pages.map(function (p, j) { return '<button data-page="' + j + '" aria-label="לפתוח את הדף המקורי בגדול" style="transform:rotate(' + (j % 2 ? 4 : -4) + 'deg)"><img src="' + esc(p) + '" alt="דף מהמחברת" loading="lazy"></button>'; }).join('') + '</div></section>';
-  if (r.added && !editing) h += '<div style="text-align:center;margin-top:8px"><button class="btn" data-a="delete">' + ic('trash', 16, '#9A4F24', 2) + 'למחוק את המתכון</button></div>';
+  if (!editing && r.hiddenCount) h += '<div style="text-align:center"><button class="linkbtn" data-a="unhide">להחזיר ' + (r.hiddenCount === 1 ? 'תמונה שנמחקה' : r.hiddenCount + ' תמונות שנמחקו') + '</button></div>';
+  if (!editing) h += '<div style="text-align:center;margin-top:8px"><button class="btn" data-a="delete">' + ic('trash', 16, '#9A4F24', 2) + 'למחוק את המתכון</button></div>';
   h += '</div></div></div></div>'
     + '<div class="navbar"><button class="round paper" data-a="prev" aria-label="לכרטיס הקודם"' + (i === 0 ? ' disabled style="opacity:.4"' : '') + '>' + ic('back', 22, '#5B3A1E', 2) + '</button>'
     + zoomCtl()
@@ -493,6 +509,8 @@ BIND.recipe = function (el, v) {
       var h = $('.hero', el), t = document.createElement('div'); t.innerHTML = heroHtml(r); h.replaceWith(t.firstChild);
       bindGallery(); var sw = $('[data-a=photo]', el); if (sw) sw.onclick = function () { photoSheet(r); };
     }; });
+    var pd = $('[data-a=pdel]', el);
+    if (pd) pd.onclick = function () { var ps = r.photos, gi = Math.min(GI[r.k] || 0, ps.length - 1); deletePhoto(r, ps[gi]); };
   }
   bindGallery();
   a('fav', function () { toggleFav(r.k); var b = $('[data-a=fav]', el), on = isFav(r.k); b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); b.setAttribute('aria-label', on ? 'להוציא מהמועדפים' : 'להוסיף למועדפים'); toast(on ? '★ נוסף למועדפים' : 'הוצא מהמועדפים'); });
@@ -501,7 +519,8 @@ BIND.recipe = function (el, v) {
   a('unok', function () { del('approved', r.k); ui.note = null; show(null, true); });
   a('sug', function () { doMerge(r.k, r.suggest); });
   a('photo', function () { photoSheet(r); });
-  a('delete', function () { if (confirm('למחוק את ״' + r.title + '״?')) { del('added', r.k); ui.note = null; replace({ name: 'contents' }, 'back'); toast('המתכון נמחק'); } });
+  a('delete', function () { deleteRecipe(r); });
+  a('unhide', function () { withPassword('להחזיר את התמונות שנמחקו?', 'כל התמונות שנמחקו מהמתכון יחזרו.', 'להחזיר', function () { del('hidden', r.k); show(null, true); toast('התמונות חזרו'); }); });
   $$('[data-unmerge]', el).forEach(function (b) { b.onclick = function () { del('merges', b.dataset.unmerge); show(null, true); toast('הופרד לכרטיס נפרד'); }; });
   var pages = r.pages.map(pageSrc).filter(Boolean);
   $$('[data-page]', el).forEach(function (b) { b.onclick = function () { viewer(pages, +b.dataset.page); }; });
@@ -527,6 +546,41 @@ function sheet(html) {
   var bg = $('.sheet-bg', layer);
   bg.onclick = function (e) { if (e.target === bg) closeLayer(); };
   return $('.sheet', layer);
+}
+/* ---- password-protected actions (delete) */
+var PASS = '12345', unlockedUntil = 0;
+function withPassword(title, text, okLabel, fn) {
+  if (Date.now() < unlockedUntil) {
+    var el0 = sheet('<h3>' + esc(title) + '</h3><p class="pw-text">' + esc(text) + '</p><div class="pw-actions"><button class="btn danger big" data-a="go">' + ic('trash', 18, '#FFFFFF', 2) + esc(okLabel) + '</button><button class="btn big" data-a="close">ביטול</button></div>');
+    $('[data-a=go]', el0).onclick = function () { closeLayer(); fn(); };
+    $('[data-a=close]', el0).onclick = closeLayer; return;
+  }
+  var el = sheet('<h3>' + esc(title) + '</h3><p class="pw-text">' + esc(text) + '</p>'
+    + '<label class="field"><span>סיסמה</span><input class="inp pw" type="password" inputmode="numeric" autocomplete="off" dir="ltr"></label>'
+    + '<p class="pw-err" hidden>הסיסמה לא נכונה</p>'
+    + '<div class="pw-actions"><button class="btn danger big" data-a="go">' + ic('trash', 18, '#FFFFFF', 2) + esc(okLabel) + '</button><button class="btn big" data-a="close">ביטול</button></div>');
+  var inp = $('input', el);
+  setTimeout(function () { inp.focus(); }, 50);
+  function go() {
+    if (inp.value.trim() !== PASS) { $('.pw-err', el).hidden = false; inp.value = ''; inp.focus(); return; }
+    unlockedUntil = Date.now() + 10 * 60 * 1000; closeLayer(); fn();
+  }
+  $('[data-a=go]', el).onclick = go;
+  inp.onkeydown = function (e) { if (e.key === 'Enter') go(); };
+  $('[data-a=close]', el).onclick = closeLayer;
+}
+function deleteRecipe(r) {
+  withPassword('למחוק את ״' + r.title + '״?', 'המתכון ייעלם מהספר אצל כל המשפחה. אפשר להחזיר אותו אחר כך מהתפריט (☰ ← מתכונים שנמחקו).', 'למחוק את המתכון', function () {
+    put('removed', r.k, { title: r.title }); ui.note = null; ui.editing = null;
+    replace({ name: 'contents' }, 'back'); toast('המתכון נמחק');
+  });
+}
+function deletePhoto(r, p) {
+  withPassword('למחוק את התמונה?', 'התמונה תימחק מהמתכון ״' + r.title + '״ אצל כל המשפחה.', 'למחוק את התמונה', function () {
+    if (p.fam) del('photos', r.k);
+    else { var cur0 = (S.hidden[r.k] && S.hidden[r.k].imgs) || []; put('hidden', r.k, { imgs: cur0.concat([p.img]) }); }
+    GI[r.k] = 0; ui.note = { k: r.k, t: 'התמונה נמחקה.' }; show(null, true);
+  });
 }
 function mergeSheet(r) {
   var el = sheet('<h3>לשלב את ״' + esc(r.title) + '״ בתוך…</h3><span style="font-size:14px;color:var(--muted);margin:4px 0 10px">הכרטיס יעבור לתוך המתכון שתבחרו, והמספור יתעדכן.</span>'
