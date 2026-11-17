@@ -290,3 +290,5 @@ textarea.inp{min-height:140px;resize:vertical}
 .linkbtn{border:0;background:none;color:var(--rust);text-decoration:underline;font-size:15px;padding:6px}
 .dgone summary span{font-size:22px!important;color:var(--muted)!important}
 .dgone .drow small{margin-inline-start:auto;color:var(--rust);font-weight:700}
+.thumbw{position:relative;flex:0 0 auto;display:block}
+.thumbs .tdel{position:absolute;bottom:-6px;left:-6px;width:32px;height:32px;border-radius:50%;border:1px solid rgba(154,79,36,.45);background:#FFFDF6;display:flex;align-items:center;justify-content:center;padding:0;box-shadow:0 2px 5px rgba(60,40,20,.25)}

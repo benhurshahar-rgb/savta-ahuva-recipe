@@ -74,11 +74,11 @@ function compress(file, max, q) {
 }
 
 /* ---------------------------------------------------------------- shared family data (Firestore) */
-var S = { edits: {}, photos: {}, merges: {}, added: {}, pages: {}, approved: {}, removed: {}, hidden: {} };
-var COLLS = ['edits', 'photos', 'merges', 'added', 'pages', 'approved', 'removed', 'hidden'];
+var S = { edits: {}, photos: {}, merges: {}, added: {}, pages: {}, approved: {}, removed: {}, hidden: {}, hidpages: {} };
+var COLLS = ['edits', 'photos', 'merges', 'added', 'pages', 'approved', 'removed', 'hidden', 'hidpages'];
 var LS = 'savta-cache-v1';
 try { var cached = JSON.parse(localStorage.getItem(LS) || 'null'); if (cached) COLLS.forEach(function (c) { if (c !== 'photos' && c !== 'pages' && cached[c]) S[c] = cached[c]; }); } catch (e) {}
-function persist() { try { localStorage.setItem(LS, JSON.stringify({ edits: S.edits, merges: S.merges, added: S.added, approved: S.approved, removed: S.removed, hidden: S.hidden })); } catch (e) {} }
+function persist() { try { localStorage.setItem(LS, JSON.stringify({ edits: S.edits, merges: S.merges, added: S.added, approved: S.approved, removed: S.removed, hidden: S.hidden, hidpages: S.hidpages })); } catch (e) {} }
 var db = null, online = 'local';
 function initCloud() {
   if (!window.FB || !CFG.firebase || !CFG.firebase.apiKey) { online = 'local'; return; }
@@ -140,6 +140,9 @@ function eff(r) {
     .filter(function (p) { return p.fam || hid.indexOf(p.img) === -1; });
   out = Object.assign({}, out);
   out.hiddenCount = hid.length;
+  var hp = (S.hidpages[r.k] && S.hidpages[r.k].pages) || [];
+  out.allPages = out.pages; out.pages = out.pages.filter(function (p) { return hp.indexOf(p) === -1; });
+  out.hiddenPages = out.allPages.length - out.pages.length;
   if (out.photos.length) { var f0 = out.photos[0]; out.img = f0.img; out.credit = f0.credit; out.pos = f0.pos || '50% 50%'; out.photo = true; }
   else { out.img = ILL[CH_ICON[out.chId]] || ILL.parve; out.credit = ''; out.photo = false; }
   out.ch = CH[out.chId];
@@ -456,8 +459,10 @@ SCREENS.recipe = function (v) {
   }
   h += '<div class="r-foot">';
   var pages = r.pages.map(pageSrc).filter(Boolean);
+  if (!pages.length && r.hiddenPages && !editing) h += '<section>' + heading('מהמחברת') + '</section>';
   if (pages.length) h += '<section>' + heading('מהמחברת') + '<p style="margin:0 0 2px;text-align:center;font-size:13px;color:var(--muted)">לוחצים על הדף כדי לראות אותו בגדול</p><div class="thumbs hs">'
-    + pages.map(function (p, j) { return '<button data-page="' + j + '" aria-label="לפתוח את הדף המקורי בגדול" style="transform:rotate(' + (j % 2 ? 4 : -4) + 'deg)"><img src="' + esc(p) + '" alt="דף מהמחברת" loading="lazy"></button>'; }).join('') + '</div></section>';
+    + pages.map(function (p, j) { return '<span class="thumbw"><button data-page="' + j + '" aria-label="לפתוח את הדף המקורי בגדול" style="transform:rotate(' + (j % 2 ? 4 : -4) + 'deg)"><img src="' + esc(p) + '" alt="דף מהמחברת" loading="lazy"></button><button class="tdel" data-pdelpage="' + j + '" aria-label="למחוק את הדף">' + ic('trash', 15, '#9A4F24', 2.2) + '</button></span>'; }).join('') + '</div></section>';
+  if (!editing && r.hiddenPages) h += '<div style="text-align:center"><button class="linkbtn" data-a="unhidep">להחזיר ' + (r.hiddenPages === 1 ? 'דף שנמחק' : r.hiddenPages + ' דפים שנמחקו') + '</button></div>';
   if (!editing && r.hiddenCount) h += '<div style="text-align:center"><button class="linkbtn" data-a="unhide">להחזיר ' + (r.hiddenCount === 1 ? 'תמונה שנמחקה' : r.hiddenCount + ' תמונות שנמחקו') + '</button></div>';
   if (!editing) h += '<div style="text-align:center;margin-top:8px"><button class="btn" data-a="delete">' + ic('trash', 16, '#9A4F24', 2) + 'למחוק את המתכון</button></div>';
   h += '</div></div></div></div>'
@@ -523,7 +528,10 @@ BIND.recipe = function (el, v) {
   a('unhide', function () { withPassword('להחזיר את התמונות שנמחקו?', 'כל התמונות שנמחקו מהמתכון יחזרו.', 'להחזיר', function () { del('hidden', r.k); show(null, true); toast('התמונות חזרו'); }); });
   $$('[data-unmerge]', el).forEach(function (b) { b.onclick = function () { del('merges', b.dataset.unmerge); show(null, true); toast('הופרד לכרטיס נפרד'); }; });
   var pages = r.pages.map(pageSrc).filter(Boolean);
-  $$('[data-page]', el).forEach(function (b) { b.onclick = function () { viewer(pages, +b.dataset.page); }; });
+  var rawPages = r.pages.filter(function (p) { return pageSrc(p); });
+  $$('[data-page]', el).forEach(function (b) { b.onclick = function () { viewer(pages, +b.dataset.page, { r: r, raw: rawPages }); }; });
+  $$('[data-pdelpage]', el).forEach(function (b) { b.onclick = function () { deletePage(r, rawPages[+b.dataset.pdelpage]); }; });
+  a('unhidep', function () { withPassword('להחזיר את הדפים שנמחקו?', 'כל הדפים שנמחקו מהמתכון יחזרו.', 'להחזיר', function () { del('hidpages', r.k); show(null, true); toast('הדפים חזרו'); }); });
   // swipe between cards (RTL: swipe right = next)
   var sx = null, sy = null, card = $('.rcard', el);
   card.addEventListener('touchstart', function (e) { if (ui.editing) return; sx = e.touches[0].clientX; sy = e.touches[0].clientY; }, { passive: true });
@@ -582,6 +590,13 @@ function deletePhoto(r, p) {
     GI[r.k] = 0; ui.note = { k: r.k, t: 'התמונה נמחקה.' }; show(null, true);
   });
 }
+function deletePage(r, raw) {
+  withPassword('למחוק את הדף מהמחברת?', 'הדף יימחק מהמתכון ״' + r.title + '״ אצל כל המשפחה. אפשר להחזיר אותו אחר כך.', 'למחוק את הדף', function () {
+    var cur0 = (S.hidpages[r.k] && S.hidpages[r.k].pages) || [];
+    put('hidpages', r.k, { pages: cur0.concat([raw]) });
+    ui.note = { k: r.k, t: 'הדף נמחק.' }; closeLayer(); show(null, true);
+  });
+}
 function mergeSheet(r) {
   var el = sheet('<h3>לשלב את ״' + esc(r.title) + '״ בתוך…</h3><span style="font-size:14px;color:var(--muted);margin:4px 0 10px">הכרטיס יעבור לתוך המתכון שתבחרו, והמספור יתעדכן.</span>'
     + '<label class="search" style="flex:none">' + ic('search', 20, '#5B3A1E', 2) + '<input type="search" placeholder="לחפש לפי שם…"></label><div class="list"></div>'
@@ -631,9 +646,9 @@ function photoSheet(r) {
   if ($('[data-a=reset]', el)) $('[data-a=reset]', el).onclick = function () { del('photos', r.k); closeLayer(); show(null, true); };
   $('[data-a=close]', el).onclick = closeLayer;
 }
-function viewer(pages, i) {
+function viewer(pages, i, ctx) {
   layer.innerHTML = '<div class="viewer fade-in"><div class="bar"><button class="vb" data-a="x" aria-label="לסגור">' + ic('x', 22, '#FBF4E4', 2.2) + '</button>'
-    + '<span class="lbl"></span><div style="display:flex;gap:6px"><button class="vb" data-a="out" aria-label="להקטין">' + ic('minus', 22, '#FBF4E4', 2.2) + '</button><button class="vb" data-a="in" aria-label="להגדיל">' + ic('plus', 22, '#FBF4E4', 2.2) + '</button></div></div>'
+    + '<span class="lbl"></span><div style="display:flex;gap:6px">' + (ctx ? '<button class="vb" data-a="vdel" aria-label="למחוק את הדף">' + ic('trash', 22, '#FBF4E4', 2) + '</button>' : '') + '<button class="vb" data-a="out" aria-label="להקטין">' + ic('minus', 22, '#FBF4E4', 2.2) + '</button><button class="vb" data-a="in" aria-label="להגדיל">' + ic('plus', 22, '#FBF4E4', 2.2) + '</button></div></div>'
     + '<div class="area"><img alt="הדף המקורי מהמחברת"></div><div class="onpage hs"></div>'
     + (pages.length > 1 ? '<div class="bar"><button class="vb" data-a="p" aria-label="הדף הקודם">' + ic('back', 22, '#FBF4E4', 2.2) + '</button><span style="font-size:14px">החלקה בשתי אצבעות לזום</span><button class="vb" data-a="n" aria-label="הדף הבא">' + ic('next', 22, '#FBF4E4', 2.2) + '</button></div>' : '<div class="bar" style="justify-content:center"><span style="font-size:14px">צביטה בשתי אצבעות או לחיצה כפולה לזום</span></div>')
     + '</div>';
@@ -649,6 +664,7 @@ function viewer(pages, i) {
   }
   function zoom(f) { z = Math.max(1, Math.min(5, z * f)); if (z === 1) { tx = ty = 0; } apply(); }
   $('[data-a=x]', root).onclick = closeLayer;
+  if (ctx) $('[data-a=vdel]', root).onclick = function () { deletePage(ctx.r, ctx.raw[i]); };
   $('[data-a=in]', root).onclick = function () { zoom(1.5); };
   $('[data-a=out]', root).onclick = function () { zoom(1 / 1.5); };
   if ($('[data-a=p]', root)) { $('[data-a=p]', root).onclick = function () { i = (i - 1 + pages.length) % pages.length; load(); }; $('[data-a=n]', root).onclick = function () { i = (i + 1) % pages.length; load(); }; }
